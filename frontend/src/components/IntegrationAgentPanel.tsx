@@ -63,6 +63,32 @@ export function IntegrationAgentPanel({
     prevMessageCountRef.current = messages.length
   }, [messages])
 
+  // Sync local state when parent data changes (e.g., after sync)
+  useEffect(() => {
+    if (integration.conversation && integration.conversation.length > 0) {
+      setMessages(integration.conversation)
+    }
+  }, [integration.conversation])
+
+  // Fetch conversation on initial mount if agent exists
+  useEffect(() => {
+    if (!integration.cursor_agent_id) return
+    
+    // Initial fetch
+    const fetchConversation = async () => {
+      try {
+        const conv = await getConversation(updateId, integration.integration_id)
+        if (conv.messages.length > 0) {
+          setMessages(conv.messages)
+        }
+      } catch (e) {
+        console.error('Failed to fetch conversation:', e)
+      }
+    }
+    
+    fetchConversation()
+  }, [updateId, integration.integration_id, integration.cursor_agent_id])
+
   // Poll for conversation updates when agent is running
   useEffect(() => {
     if (integration.status !== 'in_progress' || !integration.cursor_agent_id) return

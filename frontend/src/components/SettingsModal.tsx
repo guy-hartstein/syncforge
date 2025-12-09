@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, Key, Check, AlertCircle, Loader2, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSettings, updateSettings, testConnection, deleteCursorApiKey } from '../api/settings'
+import { useConfirm } from './ConfirmDialog'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -13,6 +14,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState('')
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -67,8 +69,14 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     testMutation.mutate()
   }
 
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to remove your Cursor API key?')) {
+  const handleDelete = async () => {
+    const confirmed = await confirm({
+      title: 'Remove API Key',
+      message: 'Are you sure you want to remove your Cursor API key? You will need to re-enter it to start agents.',
+      confirmText: 'Remove',
+      variant: 'danger',
+    })
+    if (confirmed) {
       deleteMutation.mutate()
     }
   }

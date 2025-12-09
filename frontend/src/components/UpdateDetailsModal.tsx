@@ -18,6 +18,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { startAgents, syncAgents } from '../api/agents'
 import { fetchSettings } from '../api/settings'
 import { IntegrationAgentPanel } from './IntegrationAgentPanel'
+import { useToast } from './Toast'
 import type { Update } from '../api/updates'
 
 interface UpdateDetailsModalProps {
@@ -38,6 +39,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bgC
 export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsModalProps) {
   const [expandedIntegration, setExpandedIntegration] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const toast = useToast()
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -50,10 +52,10 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
     mutationFn: () => startAgents(update.id),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['updates'] })
-      alert(`Started ${result.started} agents`)
+      toast.success(`Started ${result.started} agent${result.started !== 1 ? 's' : ''}`)
     },
     onError: (error: Error) => {
-      alert(error.message)
+      toast.error(error.message)
     },
   })
 

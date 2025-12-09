@@ -104,12 +104,11 @@ class AgentOrchestrator:
             custom_instructions=update_integration.custom_instructions
         )
         
-        # Launch the agent
+        # Launch the agent (ref defaults to trying "main" then "master")
         async with CursorClient(self.api_key) as client:
             agent_id = await client.launch_agent(
                 repository=repo_url,
                 prompt=prompt,
-                ref="main",
                 auto_create_pr=auto_create_pr
             )
         

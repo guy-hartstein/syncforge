@@ -7,6 +7,7 @@ import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
 import { UpdateCard } from './UpdateCard'
 import { SettingsModal } from './SettingsModal'
+import { useConfirm } from './ConfirmDialog'
 import { fetchIntegrations, createIntegration, updateIntegration, deleteIntegration } from '../api/integrations'
 import { fetchUpdates, deleteUpdate } from '../api/updates'
 import type { Integration, IntegrationCreate } from '../types'
@@ -17,6 +18,7 @@ export function OnboardingPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null)
   const queryClient = useQueryClient()
+  const confirm = useConfirm()
 
   const { data: integrations = [], isLoading: integrationsLoading } = useQuery({
     queryKey: ['integrations'],
@@ -85,14 +87,26 @@ export function OnboardingPage() {
     }
   }
 
-  const handleDeleteIntegration = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this integration?')) {
+  const handleDeleteIntegration = async (id: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Integration',
+      message: 'Are you sure you want to delete this integration? This action cannot be undone.',
+      confirmText: 'Delete',
+      variant: 'danger',
+    })
+    if (confirmed) {
       deleteIntegrationMutation.mutate(id)
     }
   }
 
-  const handleDeleteUpdate = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this update?')) {
+  const handleDeleteUpdate = async (id: string) => {
+    const confirmed = await confirm({
+      title: 'Delete Update',
+      message: 'Are you sure you want to delete this update? All associated agent progress will be lost.',
+      confirmText: 'Delete',
+      variant: 'danger',
+    })
+    if (confirmed) {
       deleteUpdateMutation.mutate(id)
     }
   }

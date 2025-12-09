@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2 } from 'lucide-react'
 import type { Integration, IntegrationCreate } from '../types'
-import { checkGitHubRepo, type RepoCheckResponse } from '../api/github'
+import { checkGitHubRepo } from '../api/github'
+import { useToast } from './Toast'
 
 interface AddIntegrationModalProps {
   isOpen: boolean
@@ -29,6 +30,7 @@ interface LinkValidation {
 export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegration }: AddIntegrationModalProps) {
   const [linkValidations, setLinkValidations] = useState<Record<number, LinkValidation>>({})
   const [showGitHubPrompt, setShowGitHubPrompt] = useState(false)
+  const toast = useToast()
 
   const {
     register,
@@ -90,7 +92,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
 
   // Watch for link changes and validate with debounce
   useEffect(() => {
-    const timeouts: NodeJS.Timeout[] = []
+    const timeouts: ReturnType<typeof setTimeout>[] = []
     
     watchedLinks.forEach((link, index) => {
       const timeout = setTimeout(() => {
@@ -167,7 +169,11 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
           </button>
         )
       case 'invalid':
-        return <AlertCircle size={16} className="text-red-400" title={validation.error} />
+        return (
+          <span title={validation.error}>
+            <AlertCircle size={16} className="text-red-400" />
+          </span>
+        )
       default:
         return null
     }
@@ -341,7 +347,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                       <button
                         onClick={() => {
                           // TODO: Implement GitHub OAuth
-                          alert('GitHub OAuth coming soon!')
+                          toast.info('GitHub OAuth coming soon!')
                           setShowGitHubPrompt(false)
                         }}
                         className="btn-primary flex-1 flex items-center justify-center gap-2"

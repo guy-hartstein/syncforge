@@ -85,7 +85,7 @@ class CursorClient:
         self,
         repository: str,
         prompt: str,
-        ref: str = "main",
+        ref: Optional[str] = None,
         auto_create_pr: bool = False,
         model: Optional[str] = None
     ) -> str:
@@ -95,38 +95,53 @@ class CursorClient:
         Args:
             repository: GitHub repository URL (e.g., "https://github.com/owner/repo")
             prompt: The task prompt for the agent
-            ref: Git ref to work from (default: "main")
+            ref: Git ref to work from (default: tries "main", then "master")
             auto_create_pr: Whether to automatically create a PR when done
             model: Optional model name (defaults to auto-selection)
         
         Returns:
             The agent ID (e.g., "bc_abc123")
         """
-        payload = {
-            "prompt": {
-                "text": prompt
-            },
-            "source": {
-                "repository": repository,
-                "ref": ref
-            },
-            "target": {
-                "autoCreatePr": auto_create_pr,
-                "openAsCursorGithubApp": True,
-                "skipReviewerRequest": False
+        # If ref is specified, use it directly; otherwise try main then master
+        refs_to_try = [ref] if ref else ["main", "master"]
+        
+        last_error = None
+        for try_ref in refs_to_try:
+            payload = {
+                "prompt": {
+                    "text": prompt
+                },
+                "source": {
+                    "repository": repository,
+                    "ref": try_ref
+                },
+                "target": {
+                    "autoCreatePr": auto_create_pr,
+                    "openAsCursorGithubApp": True,
+                    "skipReviewerRequest": False
+                }
             }
-        }
+            
+            if model:
+                payload["model"] = model
+            
+            response = await self._client.post("/v0/agents", json=payload)
+            
+            if response.status_code in (200, 201):
+                data = response.json()
+                return data["id"]
+            
+            # Check if this is a branch-not-found error
+            error_text = response.text
+            if response.status_code == 400 and "does not exist" in error_text:
+                last_error = error_text
+                continue  # Try next ref
+            
+            # For other errors, fail immediately
+            raise CursorClientError(f"Failed to launch agent: {response.status_code} - {error_text}")
         
-        if model:
-            payload["model"] = model
-        
-        response = await self._client.post("/v0/agents", json=payload)
-        
-        if response.status_code not in (200, 201):
-            raise CursorClientError(f"Failed to launch agent: {response.status_code} - {response.text}")
-        
-        data = response.json()
-        return data["id"]
+        # All refs failed
+        raise CursorClientError(f"Failed to launch agent: {last_error}")
     
     async def get_agent_status(self, agent_id: str) -> AgentInfo:
         """
