@@ -9,8 +9,10 @@ import {
   GitPullRequest,
   SkipForward,
   Clock,
-  Trash2
+  Trash2,
+  ExternalLink
 } from 'lucide-react'
+import { UpdateDetailsModal } from './UpdateDetailsModal'
 import type { Update, UpdateIntegrationStatus } from '../api/updates'
 
 interface UpdateCardProps {
@@ -65,6 +67,7 @@ const statusConfig: Record<UpdateIntegrationStatus['status'], {
 
 export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   
   const integrationStatuses = update.integration_statuses || []
   const completedCount = integrationStatuses.filter(
@@ -76,6 +79,7 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
   const isCreating = update.status === 'creating'
   const isInProgress = update.status === 'in_progress'
   const hasIssues = integrationStatuses.some(s => s.status === 'needs_review')
+  const hasAgents = integrationStatuses.some(s => s.cursor_agent_id)
 
   return (
     <motion.div
@@ -166,25 +170,36 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
         )}
       </div>
 
-      {/* Expand/Collapse button */}
-      {integrationStatuses.length > 0 && (
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors w-full justify-center py-1"
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp size={14} />
-              Show less
-            </>
-          ) : (
-            <>
-              <ChevronDown size={14} />
-              Show details
-            </>
-          )}
-        </button>
-      )}
+      {/* Expand/Collapse and Open Details buttons */}
+      <div className="flex items-center justify-between">
+        {integrationStatuses.length > 0 && (
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors py-1"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp size={14} />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown size={14} />
+                Show details
+              </>
+            )}
+          </button>
+        )}
+        {!isCreating && (
+          <button
+            onClick={() => setIsDetailsOpen(true)}
+            className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors py-1"
+          >
+            <ExternalLink size={14} />
+            {hasAgents ? 'View Agents' : 'Manage'}
+          </button>
+        )}
+      </div>
 
       {/* Expanded details */}
       <AnimatePresence>
@@ -242,6 +257,13 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Details Modal */}
+      <UpdateDetailsModal
+        update={update}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+      />
     </motion.div>
   )
 }

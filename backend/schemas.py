@@ -98,6 +98,10 @@ class UpdateIntegrationBase(BaseModel):
     pr_url: Optional[str] = None
     agent_question: Optional[str] = None
     custom_instructions: str = ""
+    cursor_agent_id: Optional[str] = None
+    cursor_branch_name: Optional[str] = None
+    conversation: List[dict] = []
+    auto_create_pr: Optional[bool] = None  # Per-integration override
 
 
 class UpdateIntegrationResponse(UpdateIntegrationBase):
@@ -125,6 +129,7 @@ class UpdateCreate(BaseModel):
     attachments: List[dict] = []
     integration_configs: Dict[str, str] = {}  # integration_id -> custom instructions
     messages: Optional[List[Dict[str, str]]] = None  # For background title generation
+    auto_create_pr: bool = False
 
 
 class UpdateResponse(BaseModel):
@@ -135,6 +140,7 @@ class UpdateResponse(BaseModel):
     status: str
     selected_integration_ids: List[str]
     attachments: List[dict]
+    auto_create_pr: bool = False
     integration_statuses: List[UpdateIntegrationResponse] = []
     created_at: datetime
     updated_at: datetime
@@ -148,11 +154,69 @@ class UpdateListResponse(BaseModel):
     title: str
     status: str
     selected_integration_ids: List[str]
+    auto_create_pr: bool = False
     integration_statuses: List[UpdateIntegrationResponse] = []
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# Agent Schemas
+class AgentConversationMessage(BaseModel):
+    id: str
+    type: str  # "user_message" or "assistant_message"
+    text: str
+
+
+class AgentConversationResponse(BaseModel):
+    messages: List[AgentConversationMessage]
+    status: str
+    agent_id: Optional[str] = None
+    branch_name: Optional[str] = None
+    pr_url: Optional[str] = None
+
+
+class FollowupRequest(BaseModel):
+    text: str
+
+
+class StartAgentsRequest(BaseModel):
+    pass  # Empty for now, just triggers start
+
+
+class StartAgentsResponse(BaseModel):
+    started: int
+    agent_ids: List[str]
+
+
+# User Settings Schemas
+class UserSettingsBase(BaseModel):
+    cursor_api_key: Optional[str] = None
+
+
+class UserSettingsCreate(UserSettingsBase):
+    pass
+
+
+class UserSettingsUpdate(UserSettingsBase):
+    pass
+
+
+class UserSettingsResponse(BaseModel):
+    id: str
+    has_cursor_api_key: bool  # Don't expose actual key
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TestConnectionResponse(BaseModel):
+    success: bool
+    message: str
+    user_email: Optional[str] = None
 
 

@@ -27,6 +27,10 @@ def get_integration_statuses_with_names(db: Session, update: Update) -> List[Upd
             pr_url=ui.pr_url,
             agent_question=ui.agent_question,
             custom_instructions=ui.custom_instructions,
+            cursor_agent_id=ui.cursor_agent_id,
+            cursor_branch_name=ui.cursor_branch_name,
+            conversation=ui.conversation or [],
+            auto_create_pr=ui.auto_create_pr,
             created_at=ui.created_at,
             updated_at=ui.updated_at
         ))
@@ -44,6 +48,7 @@ def list_updates(db: Session = Depends(get_db)):
             title=update.title,
             status=update.status,
             selected_integration_ids=update.selected_integration_ids or [],
+            auto_create_pr=update.auto_create_pr or False,
             integration_statuses=get_integration_statuses_with_names(db, update),
             created_at=update.created_at,
             updated_at=update.updated_at
@@ -102,7 +107,8 @@ def create_update(
         implementation_guide=update_data.implementation_guide,
         status=UpdateStatus.CREATING.value if is_quick_create else UpdateStatus.IN_PROGRESS.value,
         selected_integration_ids=update_data.selected_integration_ids,
-        attachments=[a.dict() if hasattr(a, 'dict') else a for a in (update_data.attachments or [])]
+        attachments=[a.dict() if hasattr(a, 'dict') else a for a in (update_data.attachments or [])],
+        auto_create_pr=update_data.auto_create_pr or False
     )
     db.add(db_update)
     db.flush()  # Get the ID
@@ -145,6 +151,7 @@ def create_update(
         status=db_update.status,
         selected_integration_ids=db_update.selected_integration_ids or [],
         attachments=db_update.attachments or [],
+        auto_create_pr=db_update.auto_create_pr or False,
         integration_statuses=get_integration_statuses_with_names(db, db_update),
         created_at=db_update.created_at,
         updated_at=db_update.updated_at
@@ -166,6 +173,7 @@ def get_update(update_id: str, db: Session = Depends(get_db)):
         status=update.status,
         selected_integration_ids=update.selected_integration_ids or [],
         attachments=update.attachments or [],
+        auto_create_pr=update.auto_create_pr or False,
         integration_statuses=get_integration_statuses_with_names(db, update),
         created_at=update.created_at,
         updated_at=update.updated_at

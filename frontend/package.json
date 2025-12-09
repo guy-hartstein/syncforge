@@ -9,12 +9,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.17.9",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "framer-motion": "^10.18.0",
+    "lucide-react": "^0.312.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.49.3",
-    "lucide-react": "^0.312.0"
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",
@@ -27,5 +31,3 @@
     "vite": "^5.0.12"
   }
 }
-
-

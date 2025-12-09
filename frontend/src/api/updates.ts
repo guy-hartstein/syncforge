@@ -2,6 +2,12 @@ import type { Attachment } from './wizard'
 
 const API_BASE = 'http://localhost:8000/api/updates'
 
+export interface ConversationMessage {
+  id: string
+  type: 'user_message' | 'assistant_message'
+  text: string
+}
+
 export interface UpdateIntegrationStatus {
   id: string
   update_id: string
@@ -11,6 +17,10 @@ export interface UpdateIntegrationStatus {
   pr_url?: string
   agent_question?: string
   custom_instructions: string
+  cursor_agent_id?: string
+  cursor_branch_name?: string
+  conversation: ConversationMessage[]
+  auto_create_pr?: boolean | null  // Per-integration override
   created_at: string
   updated_at: string
 }
@@ -23,6 +33,7 @@ export interface Update {
   status: 'creating' | 'in_progress' | 'completed'
   selected_integration_ids: string[]
   attachments: Attachment[]
+  auto_create_pr: boolean
   integration_statuses: UpdateIntegrationStatus[]
   created_at: string
   updated_at: string
@@ -36,6 +47,7 @@ export interface UpdateCreate {
   attachments: Attachment[]
   integration_configs: Record<string, string>
   messages?: { role: string; content: string }[]  // For background title generation
+  auto_create_pr?: boolean
 }
 
 export async function fetchUpdates(): Promise<Update[]> {

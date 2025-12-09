@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Layers, Sparkles, Rocket, RefreshCw } from 'lucide-react'
+import { Plus, Layers, Sparkles, Rocket, RefreshCw, Settings } from 'lucide-react'
 import { IntegrationCard } from './IntegrationCard'
 import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
 import { UpdateCard } from './UpdateCard'
+import { SettingsModal } from './SettingsModal'
 import { fetchIntegrations, createIntegration, updateIntegration, deleteIntegration } from '../api/integrations'
 import { fetchUpdates, deleteUpdate } from '../api/updates'
 import type { Integration, IntegrationCreate } from '../types'
@@ -13,6 +14,7 @@ import type { Integration, IntegrationCreate } from '../types'
 export function OnboardingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isWizardOpen, setIsWizardOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null)
   const queryClient = useQueryClient()
 
@@ -125,6 +127,13 @@ export function OnboardingPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                title="Settings"
+              >
+                <Settings size={20} />
+              </button>
               {integrations.length > 0 && (
                 <button
                   onClick={() => setIsWizardOpen(true)}
@@ -163,7 +172,7 @@ export function OnboardingPage() {
                     <span className="text-sm text-text-muted">({updates.length})</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                   {updates.map((update, index) => (
                     <UpdateCard
                       key={update.id}
@@ -237,6 +246,11 @@ export function OnboardingPage() {
         onClose={() => setIsWizardOpen(false)}
         onUpdateCreated={handleUpdateCreated}
         integrations={integrations}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   )

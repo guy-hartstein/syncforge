@@ -241,26 +241,31 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                   </label>
                   <div className="space-y-2">
                     {fields.map((field, index) => (
-                      <div key={field.id} className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Github size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                          <input
-                            {...register(`github_links.${index}.value`)}
-                            placeholder="https://github.com/owner/repo"
-                            className={`input pl-10 pr-10 ${getInputBorderClass(index)}`}
-                          />
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            {getStatusIcon(index)}
+                      <div key={field.id}>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Github size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                            <input
+                              {...register(`github_links.${index}.value`)}
+                              placeholder="https://github.com/owner/repo"
+                              className={`input pl-10 pr-10 ${getInputBorderClass(index)}`}
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              {getStatusIcon(index)}
+                            </div>
                           </div>
+                          {fields.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLink(index)}
+                              className="p-3 rounded-lg bg-surface border border-border hover:border-red-500/50 hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
-                        {fields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveLink(index)}
-                            className="p-3 rounded-lg bg-surface border border-border hover:border-red-500/50 hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                        {linkValidations[index]?.status === 'invalid' && linkValidations[index]?.error && (
+                          <p className="mt-1 text-sm text-red-400">{linkValidations[index].error}</p>
                         )}
                       </div>
                     ))}

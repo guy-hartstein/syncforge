@@ -7,6 +7,8 @@ from routes.github import router as github_router
 from routes.integrations import router as integrations_router
 from routes.update_wizard import router as wizard_router
 from routes.updates import router as updates_router
+from routes.agents import router as agents_router
+from routes.settings import router as settings_router
 
 # Load environment variables
 load_dotenv()
@@ -33,6 +35,8 @@ app.include_router(integrations_router)
 app.include_router(github_router)
 app.include_router(wizard_router)
 app.include_router(updates_router)
+app.include_router(agents_router)
+app.include_router(settings_router)
 
 
 @app.get("/health")

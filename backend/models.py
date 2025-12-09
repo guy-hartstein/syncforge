@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey, Enum
+from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -43,6 +43,7 @@ class Update(Base):
     status = Column(String(20), default=UpdateStatus.IN_PROGRESS.value)
     selected_integration_ids = Column(JSON, default=list)  # Empty = all
     attachments = Column(JSON, default=list)
+    auto_create_pr = Column(Boolean, default=False)  # Whether to auto-create PRs
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -60,11 +61,24 @@ class UpdateIntegration(Base):
     pr_url = Column(String(500), nullable=True)
     agent_question = Column(Text, nullable=True)
     custom_instructions = Column(Text, default="")
+    cursor_agent_id = Column(String(50), nullable=True)  # Cursor agent ID (e.g., "bc_abc123")
+    cursor_branch_name = Column(String(255), nullable=True)  # Branch created by agent
+    conversation = Column(JSON, default=list)  # Cached conversation messages
+    auto_create_pr = Column(Boolean, nullable=True)  # Per-integration override for auto PR creation
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     update = relationship("Update", back_populates="integration_statuses")
     integration = relationship("Integration")
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    cursor_api_key = Column(Text, nullable=True)  # Encrypted Cursor API key
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

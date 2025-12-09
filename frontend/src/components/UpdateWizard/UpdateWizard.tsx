@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Rocket } from 'lucide-react'
+import { X, Rocket, GitPullRequest } from 'lucide-react'
 import { ChatInterface } from './ChatInterface'
 import { AttachmentPanel } from './AttachmentPanel'
 import { IntegrationSelector } from './IntegrationSelector'
@@ -34,6 +34,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [settingsIntegration, setSettingsIntegration] = useState<Integration | null>(null)
+  const [autoCreatePr, setAutoCreatePr] = useState(false)
 
   // Initialize wizard session
   useEffect(() => {
@@ -155,6 +156,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
         attachments: attachments,
         integration_configs: integrationConfigs,
         messages: messages,  // Pass messages for background title/guide generation
+        auto_create_pr: autoCreatePr,
       })
       
       // Notify parent and close immediately - don't wait for title generation
@@ -163,7 +165,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
     } catch (error) {
       console.error('Failed to start update:', error)
     }
-  }, [sessionId, selectedIntegrations, integrationConfigs, attachments, messages, onUpdateCreated])
+  }, [sessionId, selectedIntegrations, integrationConfigs, attachments, messages, autoCreatePr, onUpdateCreated])
 
   const handleClose = () => {
     setSessionId(null)
@@ -172,6 +174,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
     setSelectedIntegrations([])
     setIntegrationConfigs({})
     setReadyToProceed(false)
+    setAutoCreatePr(false)
     onClose()
   }
 
@@ -240,6 +243,31 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
                         onOpenSettings={setSettingsIntegration}
                         integrationConfigs={integrationConfigs}
                       />
+                    </div>
+
+                    {/* Auto Create PR Toggle */}
+                    <div className="border-t border-border pt-6">
+                      <label className="flex items-center justify-between cursor-pointer group">
+                        <div className="flex items-center gap-2">
+                          <GitPullRequest size={16} className="text-text-muted group-hover:text-text-secondary transition-colors" />
+                          <div>
+                            <span className="text-sm font-medium text-text-primary">Auto Create PR</span>
+                            <p className="text-xs text-text-muted">Automatically create pull requests when agents complete</p>
+                          </div>
+                        </div>
+                        <div
+                          onClick={() => setAutoCreatePr(!autoCreatePr)}
+                          className={`relative w-11 h-6 rounded-full transition-colors ${
+                            autoCreatePr ? 'bg-accent' : 'bg-surface-hover'
+                          }`}
+                        >
+                          <div
+                            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                              autoCreatePr ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </div>
+                      </label>
                     </div>
                   </div>
                 </div>
