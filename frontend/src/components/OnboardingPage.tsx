@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Layers, Sparkles, Rocket } from 'lucide-react'
+import { Plus, Layers, Sparkles, Rocket, RefreshCw } from 'lucide-react'
 import { IntegrationCard } from './IntegrationCard'
 import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
+import { UpdateCard } from './UpdateCard'
 import { fetchIntegrations, createIntegration, updateIntegration, deleteIntegration } from '../api/integrations'
+import { fetchUpdates, deleteUpdate } from '../api/updates'
 import type { Integration, IntegrationCreate } from '../types'
 
 export function OnboardingPage() {
@@ -14,9 +16,22 @@ export function OnboardingPage() {
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null)
   const queryClient = useQueryClient()
 
-  const { data: integrations = [], isLoading } = useQuery({
+  const { data: integrations = [], isLoading: integrationsLoading } = useQuery({
     queryKey: ['integrations'],
     queryFn: fetchIntegrations,
+  })
+
+  const { data: updates = [], isLoading: updatesLoading } = useQuery({
+    queryKey: ['updates'],
+    queryFn: fetchUpdates,
+    // Poll every 2 seconds while any update is still creating
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data?.some(u => u.status === 'creating')) {
+        return 2000
+      }
+      return false
+    },
   })
 
   const createMutation = useMutation({
@@ -36,10 +51,17 @@ export function OnboardingPage() {
     },
   })
 
-  const deleteMutation = useMutation({
+  const deleteIntegrationMutation = useMutation({
     mutationFn: deleteIntegration,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations'] })
+    },
+  })
+
+  const deleteUpdateMutation = useMutation({
+    mutationFn: deleteUpdate,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['updates'] })
     },
   })
 
@@ -61,11 +83,24 @@ export function OnboardingPage() {
     }
   }
 
-  const handleDelete = (id: string) => {
+  const handleDeleteIntegration = (id: string) => {
     if (window.confirm('Are you sure you want to delete this integration?')) {
-      deleteMutation.mutate(id)
+      deleteIntegrationMutation.mutate(id)
     }
   }
+
+  const handleDeleteUpdate = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this update?')) {
+      deleteUpdateMutation.mutate(id)
+    }
+  }
+
+  const handleUpdateCreated = () => {
+    queryClient.invalidateQueries({ queryKey: ['updates'] })
+    setIsWizardOpen(false)
+  }
+
+  const isLoading = integrationsLoading || updatesLoading
 
   return (
     <div className="min-h-screen bg-background">
@@ -112,36 +147,81 @@ export function OnboardingPage() {
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : integrations.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center py-20"
-          >
-            <div className="w-20 h-20 rounded-2xl bg-surface border border-border flex items-center justify-center mb-6">
-              <Layers className="w-10 h-10 text-text-muted" />
-            </div>
-            <h2 className="text-xl font-semibold text-text-primary mb-2">No integrations yet</h2>
-            <p className="text-text-secondary mb-6 text-center max-w-md">
-              Add your first integration to get started. Include GitHub links and instructions for each integration.
-            </p>
-            <button onClick={() => handleOpenModal()} className="btn-primary flex items-center gap-2">
-              <Plus size={18} />
-              Add your first integration
-            </button>
-          </motion.div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {integrations.map((integration, index) => (
-              <IntegrationCard
-                key={integration.id}
-                integration={integration}
-                onEdit={handleOpenModal}
-                onDelete={handleDelete}
-                index={index}
-              />
-            ))}
-          </div>
+          <>
+            {/* Updates Section */}
+            {updates.length > 0 && (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-12"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5 text-text-muted" />
+                    <h2 className="text-lg font-semibold text-text-primary">Updates</h2>
+                    <span className="text-sm text-text-muted">({updates.length})</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {updates.map((update, index) => (
+                    <UpdateCard
+                      key={update.id}
+                      update={update}
+                      onDelete={handleDeleteUpdate}
+                      index={index}
+                    />
+                  ))}
+                </div>
+              </motion.section>
+            )}
+
+            {/* Integrations Section */}
+            {integrations.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center justify-center py-20"
+              >
+                <div className="w-20 h-20 rounded-2xl bg-surface border border-border flex items-center justify-center mb-6">
+                  <Layers className="w-10 h-10 text-text-muted" />
+                </div>
+                <h2 className="text-xl font-semibold text-text-primary mb-2">No integrations yet</h2>
+                <p className="text-text-secondary mb-6 text-center max-w-md">
+                  Add your first integration to get started. Include GitHub links and instructions for each integration.
+                </p>
+                <button onClick={() => handleOpenModal()} className="btn-primary flex items-center gap-2">
+                  <Plus size={18} />
+                  Add your first integration
+                </button>
+              </motion.div>
+            ) : (
+              <motion.section
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: updates.length > 0 ? 0.1 : 0 }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-text-muted" />
+                    <h2 className="text-lg font-semibold text-text-primary">Integrations</h2>
+                    <span className="text-sm text-text-muted">({integrations.length})</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {integrations.map((integration, index) => (
+                    <IntegrationCard
+                      key={integration.id}
+                      integration={integration}
+                      onEdit={handleOpenModal}
+                      onDelete={handleDeleteIntegration}
+                      index={index}
+                    />
+                  ))}
+                </div>
+              </motion.section>
+            )}
+          </>
         )}
       </div>
 
@@ -155,8 +235,10 @@ export function OnboardingPage() {
       <UpdateWizard
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
+        onUpdateCreated={handleUpdateCreated}
         integrations={integrations}
       />
     </div>
   )
 }
+

@@ -1,7 +1,8 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON
-from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
+from sqlalchemy import Column, String, Text, DateTime, JSON, ForeignKey, Enum
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
+import enum
 
 from database import Base
 
@@ -15,5 +16,55 @@ class Integration(Base):
     instructions = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UpdateStatus(str, enum.Enum):
+    CREATING = "creating"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class UpdateIntegrationStatus(str, enum.Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    NEEDS_REVIEW = "needs_review"
+    READY_TO_MERGE = "ready_to_merge"
+    SKIPPED = "skipped"
+    COMPLETE = "complete"
+
+
+class Update(Base):
+    __tablename__ = "updates"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title = Column(String(255), nullable=False)
+    description = Column(Text, default="")
+    implementation_guide = Column(Text, default="")
+    status = Column(String(20), default=UpdateStatus.IN_PROGRESS.value)
+    selected_integration_ids = Column(JSON, default=list)  # Empty = all
+    attachments = Column(JSON, default=list)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to UpdateIntegration
+    integration_statuses = relationship("UpdateIntegration", back_populates="update", cascade="all, delete-orphan")
+
+
+class UpdateIntegration(Base):
+    __tablename__ = "update_integrations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    update_id = Column(String(36), ForeignKey("updates.id", ondelete="CASCADE"), nullable=False)
+    integration_id = Column(String(36), ForeignKey("integrations.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default=UpdateIntegrationStatus.PENDING.value)
+    pr_url = Column(String(500), nullable=True)
+    agent_question = Column(Text, nullable=True)
+    custom_instructions = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    update = relationship("Update", back_populates="integration_statuses")
+    integration = relationship("Integration")
 
 

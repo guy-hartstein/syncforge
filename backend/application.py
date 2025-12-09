@@ -6,6 +6,7 @@ from database import Base, engine
 from routes.github import router as github_router
 from routes.integrations import router as integrations_router
 from routes.update_wizard import router as wizard_router
+from routes.updates import router as updates_router
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(integrations_router)
 app.include_router(github_router)
 app.include_router(wizard_router)
+app.include_router(updates_router)
 
 
 @app.get("/health")

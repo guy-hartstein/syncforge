@@ -137,6 +137,79 @@ class UpdateAgent:
             "clarification_count": result["clarification_count"],
             "ready_to_proceed": result["ready_to_proceed"]
         }
+    
+    def generate_title(self, conversation: list[dict]) -> str:
+        """Generate a short title (3-5 words) from the conversation."""
+        if not self.llm:
+            # Fallback title
+            from datetime import datetime
+            return f"Update - {datetime.now().strftime('%b %d')}"
+        
+        conversation_text = "\n".join([
+            f"{msg['role']}: {msg['content']}" 
+            for msg in conversation
+        ])
+        
+        messages = [
+            SystemMessage(content="Generate a very short title (3-10 words max) that summarizes this integration update. Return ONLY the title, nothing else."),
+            HumanMessage(content=conversation_text)
+        ]
+        
+        response = self.llm.invoke(messages)
+        return response.content.strip().strip('"')
+    
+    def generate_implementation_guide(self, conversation: list[dict], attachments: list[dict]) -> str:
+        """Generate an implementation guide markdown document from the conversation."""
+        if not self.llm:
+            # Fallback guide
+            conversation_text = "\n".join([
+                f"- **{msg['role']}**: {msg['content']}" 
+                for msg in conversation
+            ])
+            return f"""# Implementation Guide
+
+## Overview
+This document contains the implementation details gathered from the update wizard conversation.
+
+## Conversation Summary
+{conversation_text}
+
+## Attachments
+{chr(10).join([f"- [{a.get('name', 'Attachment')}]({a.get('url', '')})" for a in attachments]) if attachments else "No attachments provided."}
+
+## Instructions
+Follow the changes described in the conversation above to update each integration.
+"""
+        
+        conversation_text = "\n".join([
+            f"{msg['role'].upper()}: {msg['content']}" 
+            for msg in conversation
+        ])
+        
+        attachments_text = "\n".join([
+            f"- {a.get('name', 'Attachment')}: {a.get('url', a.get('file_path', 'N/A'))}"
+            for a in attachments
+        ]) if attachments else "None"
+        
+        messages = [
+            SystemMessage(content="""Generate a detailed implementation guide in Markdown format based on the conversation below. 
+The guide should include:
+1. Overview - A summary of what needs to be updated
+2. Changes Required - Detailed list of changes to implement
+3. Technical Details - Any specific technical requirements mentioned
+4. Breaking Changes - Any breaking changes or migration notes
+5. References - Links to PRs, documentation, or other resources
+
+Keep it concise but comprehensive. This will be used by an AI agent to implement the updates."""),
+            HumanMessage(content=f"""CONVERSATION:
+{conversation_text}
+
+ATTACHMENTS:
+{attachments_text}""")
+        ]
+        
+        response = self.llm.invoke(messages)
+        return response.content
 
 
 # Singleton instance

@@ -101,3 +101,20 @@ export async function updateConfig(
   if (!response.ok) throw new Error('Failed to update config')
 }
 
+export interface WizardSubmitResponse {
+  title: string
+  description: string
+  implementation_guide: string
+  selected_integrations: string[]
+  integration_configs: Record<string, string>
+  attachments: Attachment[]
+}
+
+export async function submitWizard(sessionId: string): Promise<WizardSubmitResponse> {
+  const response = await fetch(`${API_BASE}/${sessionId}/submit`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error('Failed to submit wizard')
+  return response.json()
+}
+

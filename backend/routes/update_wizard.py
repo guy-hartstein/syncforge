@@ -199,3 +199,40 @@ async def update_config(session_id: str, request: WizardConfigRequest):
     
     return {"success": True}
 
+
+@router.post("/{session_id}/submit")
+async def submit_wizard(session_id: str):
+    """Submit the wizard and create an update."""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    session = sessions[session_id]
+    agent = get_update_agent()
+    
+    # Generate title from conversation
+    title = agent.generate_title(session["messages"])
+    
+    # Generate implementation guide
+    implementation_guide = agent.generate_implementation_guide(
+        session["messages"],
+        session["attachments"]
+    )
+    
+    # Create description from last AI summary
+    description = ""
+    for msg in reversed(session["messages"]):
+        if msg["role"] == "assistant":
+            description = msg["content"]
+            break
+    
+    # Return data for frontend to create the update
+    return {
+        "title": title,
+        "description": description,
+        "implementation_guide": implementation_guide,
+        "selected_integrations": session["selected_integrations"],
+        "integration_configs": session["integration_configs"],
+        "attachments": session["attachments"]
+    }
+
+

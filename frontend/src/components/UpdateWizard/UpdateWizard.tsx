@@ -11,19 +11,20 @@ import {
   uploadFile,
   addUrl,
   removeAttachment,
-  updateConfig,
   type ChatMessage,
   type Attachment
 } from '../../api/wizard'
+import { createUpdate } from '../../api/updates'
 import type { Integration } from '../../types'
 
 interface UpdateWizardProps {
   isOpen: boolean
   onClose: () => void
+  onUpdateCreated: () => void
   integrations: Integration[]
 }
 
-export function UpdateWizard({ isOpen, onClose, integrations }: UpdateWizardProps) {
+export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }: UpdateWizardProps) {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -147,14 +148,22 @@ export function UpdateWizard({ isOpen, onClose, integrations }: UpdateWizardProp
     if (!sessionId) return
 
     try {
-      await updateConfig(sessionId, selectedIntegrations, integrationConfigs)
-      // TODO: Trigger the actual update process
-      alert('Update started! This will be implemented in the next phase.')
-      onClose()
+      // Create the update immediately with messages for background processing
+      // The backend will generate title and guide in a background task
+      await createUpdate({
+        selected_integration_ids: selectedIntegrations,
+        attachments: attachments,
+        integration_configs: integrationConfigs,
+        messages: messages,  // Pass messages for background title/guide generation
+      })
+      
+      // Notify parent and close immediately - don't wait for title generation
+      onUpdateCreated()
+      handleClose()
     } catch (error) {
       console.error('Failed to start update:', error)
     }
-  }, [sessionId, selectedIntegrations, integrationConfigs, onClose])
+  }, [sessionId, selectedIntegrations, integrationConfigs, attachments, messages, onUpdateCreated])
 
   const handleClose = () => {
     setSessionId(null)
@@ -273,4 +282,3 @@ export function UpdateWizard({ isOpen, onClose, integrations }: UpdateWizardProp
     </AnimatePresence>
   )
 }
-
