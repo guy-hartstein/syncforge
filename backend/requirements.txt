@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+langgraph
+langchain-openai
+langchain-anthropic
+python-multipart
+httpx
+aiofiles
+python-dotenv
+

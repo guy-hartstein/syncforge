@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-text-primary antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-border-light;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent text-background font-medium px-4 py-2 rounded-lg 
+           hover:bg-accent-hover transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .btn-secondary {
+    @apply bg-surface text-text-primary font-medium px-4 py-2 rounded-lg border border-border
+           hover:bg-surface-hover hover:border-border-light transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-border-light focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .btn-ghost {
+    @apply text-text-secondary font-medium px-4 py-2 rounded-lg
+           hover:text-text-primary hover:bg-surface transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-border focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .input {
+    @apply w-full bg-surface border border-border rounded-lg px-4 py-3 text-text-primary
+           placeholder:text-text-muted
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+           transition-colors duration-200;
+  }
+
+  .textarea {
+    @apply w-full bg-surface border border-border rounded-lg px-4 py-3 text-text-primary
+           placeholder:text-text-muted resize-none font-mono text-sm
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+           transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-surface border border-border rounded-xl p-5
+           hover:border-border-light transition-all duration-200;
+  }
+}
+
+
