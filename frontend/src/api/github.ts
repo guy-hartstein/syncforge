@@ -100,3 +100,21 @@ export async function listRepoPullRequests(
   const data = await response.json()
   return data.pull_requests
 }
+
+export interface BranchStatusResponse {
+  branch_exists: boolean
+  pr_url: string | null
+  pr_number: number | null
+  last_commit_sha: string | null
+}
+
+export async function checkBranchStatus(
+  updateId: string,
+  integrationId: string
+): Promise<BranchStatusResponse> {
+  const response = await fetch(`${API_BASE}/check-branch/${updateId}/${integrationId}`)
+  if (!response.ok) {
+    throw new Error('Failed to check branch status')
+  }
+  return response.json()
+}

@@ -20,6 +20,7 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { sendFollowup, stopAgent, getConversation, updateIntegrationSettings } from '../api/agents'
+import { checkBranchStatus } from '../api/github'
 import type { UpdateIntegrationStatus, ConversationMessage } from '../api/updates'
 
 interface IntegrationAgentPanelProps {
@@ -44,6 +45,9 @@ export function IntegrationAgentPanel({
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<ConversationMessage[]>(integration.conversation || [])
   const [showPlan, setShowPlan] = useState(false)
+  const [branchCreated, setBranchCreated] = useState(false)
+  const [lastCommitSha, setLastCommitSha] = useState<string | null>(null)
+  const [waitingForUpdate, setWaitingForUpdate] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(messages.length)
   const queryClient = useQueryClient()
@@ -90,30 +94,83 @@ export function IntegrationAgentPanel({
     fetchConversation()
   }, [updateId, integration.integration_id, integration.cursor_agent_id])
 
-  // Poll for conversation updates when agent is running
+  // Poll GitHub for branch creation (before branch exists)
   useEffect(() => {
-    if (integration.status !== 'in_progress' || !integration.cursor_agent_id) return
+    if (integration.status !== 'in_progress' || !integration.cursor_branch_name || branchCreated) return
 
     const interval = setInterval(async () => {
+      try {
+        const status = await checkBranchStatus(updateId, integration.integration_id)
+        if (status.branch_exists) {
+          setBranchCreated(true)
+          queryClient.invalidateQueries({ queryKey: ['updates'] })
+        }
+      } catch (e) {
+        console.error('Failed to check branch status:', e)
+      }
+    }, 15000)  // Poll GitHub every 15s
+
+    return () => clearInterval(interval)
+  }, [updateId, integration.integration_id, integration.status, integration.cursor_branch_name, branchCreated, queryClient])
+
+  // Fetch conversation once after branch is created
+  useEffect(() => {
+    if (!integration.cursor_agent_id || !branchCreated) return
+
+    const fetchConversation = async () => {
       try {
         const conv = await getConversation(updateId, integration.integration_id)
         setMessages(conv.messages)
       } catch (e) {
-        console.error('Failed to poll conversation:', e)
+        console.error('Failed to fetch conversation:', e)
       }
-    }, 10000)  // Poll every 10s to avoid rate limiting
+    }
+
+    fetchConversation()
+  }, [updateId, integration.integration_id, integration.cursor_agent_id, branchCreated])
+
+  // Poll for branch updates after sending a follow-up
+  useEffect(() => {
+    if (!waitingForUpdate || !lastCommitSha) return
+
+    const interval = setInterval(async () => {
+      try {
+        const status = await checkBranchStatus(updateId, integration.integration_id)
+        if (status.last_commit_sha && status.last_commit_sha !== lastCommitSha) {
+          // New commit detected - agent has pushed changes
+          setWaitingForUpdate(false)
+          setLastCommitSha(null)
+          // Fetch updated conversation
+          const conv = await getConversation(updateId, integration.integration_id)
+          setMessages(conv.messages)
+          queryClient.invalidateQueries({ queryKey: ['updates'] })
+        }
+      } catch (e) {
+        console.error('Failed to check for updates:', e)
+      }
+    }, 15000)
 
     return () => clearInterval(interval)
-  }, [updateId, integration.integration_id, integration.status, integration.cursor_agent_id])
+  }, [updateId, integration.integration_id, waitingForUpdate, lastCommitSha, queryClient])
 
   const followupMutation = useMutation({
     mutationFn: (text: string) => sendFollowup(updateId, integration.integration_id, text),
-    onSuccess: () => {
+    onSuccess: async () => {
       setMessages((prev) => [
         ...prev,
         { id: `user-${Date.now()}`, type: 'user_message', text: message },
       ])
       setMessage('')
+      // Get current commit SHA before agent makes changes
+      try {
+        const status = await checkBranchStatus(updateId, integration.integration_id)
+        if (status.last_commit_sha) {
+          setLastCommitSha(status.last_commit_sha)
+          setWaitingForUpdate(true)
+        }
+      } catch (e) {
+        console.error('Failed to get commit SHA:', e)
+      }
       queryClient.invalidateQueries({ queryKey: ['updates'] })
     },
   })
@@ -468,12 +525,19 @@ export function IntegrationAgentPanel({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input - show when agent is running, needs review, or has a pending question */}
+          {/* Input - show when agent is running, needs review, ready to merge, or has a pending question */}
           {(integration.status === 'in_progress' || 
             integration.status === 'needs_review' || 
+            integration.status === 'ready_to_merge' ||
             integration.agent_question) &&
             integration.cursor_agent_id && (
               <div className="p-4 border-t border-border">
+                {waitingForUpdate && (
+                  <div className="flex items-center gap-2 mb-3 text-sm text-text-muted">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Waiting for agent to push changes...</span>
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <textarea
                     value={message}

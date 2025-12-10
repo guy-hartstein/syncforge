@@ -247,7 +247,9 @@ class AgentOrchestrator:
                 conversation = await client.get_conversation(ui.cursor_agent_id)
             
             # Update branch and PR info
-            if agent_info.branch_name:
+            # Only set branch name from Cursor if we don't already have one
+            # (we pass our generated branch name to Cursor, so trust our stored value)
+            if agent_info.branch_name and not ui.cursor_branch_name:
                 ui.cursor_branch_name = agent_info.branch_name
             if agent_info.pr_url:
                 ui.pr_url = agent_info.pr_url

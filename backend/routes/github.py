@@ -5,7 +5,7 @@ from typing import Optional, List
 import httpx
 
 from database import get_db
-from models import UserSettings
+from models import UserSettings, UpdateIntegration, Integration, UpdateIntegrationStatus
 from schemas import GitHubPATRequest, GitHubRepo, GitHubReposResponse
 
 
@@ -407,4 +407,95 @@ async def get_pull_request_details(
             additions=pr_data.get("additions", 0),
             deletions=pr_data.get("deletions", 0),
             changed_files=pr_data.get("changed_files", 0),
+        )
+
+
+class BranchStatusResponse(BaseModel):
+    branch_exists: bool
+    pr_url: Optional[str] = None
+    pr_number: Optional[int] = None
+    last_commit_sha: Optional[str] = None
+
+
+@router.get("/check-branch/{update_id}/{integration_id}", response_model=BranchStatusResponse)
+async def check_branch_status(
+    update_id: str,
+    integration_id: str,
+    db: Session = Depends(get_db)
+):
+    """Check if the branch exists on GitHub and if there's a PR for it."""
+    token = get_github_token(db)
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub not connected")
+    
+    # Get the update integration to find the branch name
+    ui = db.query(UpdateIntegration).filter(
+        UpdateIntegration.update_id == update_id,
+        UpdateIntegration.integration_id == integration_id
+    ).first()
+    
+    if not ui or not ui.cursor_branch_name:
+        return BranchStatusResponse(branch_exists=False)
+    
+    # Get the integration to find the GitHub repo
+    integration = db.query(Integration).filter(Integration.id == integration_id).first()
+    if not integration or not integration.github_links:
+        raise HTTPException(status_code=404, detail="Integration not found or has no GitHub links")
+    
+    # Parse the GitHub URL
+    parsed = parse_github_url(integration.github_links[0])
+    if not parsed:
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL")
+    
+    owner, repo = parsed
+    branch_name = ui.cursor_branch_name
+    
+    async with httpx.AsyncClient() as client:
+        # Check if branch exists
+        branch_response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_name}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        branch_exists = branch_response.status_code == 200
+        
+        if not branch_exists:
+            return BranchStatusResponse(branch_exists=False)
+        
+        # Get the latest commit SHA from branch data
+        branch_data = branch_response.json()
+        last_commit_sha = branch_data.get("commit", {}).get("sha")
+        
+        # Branch exists - check for PRs from this branch
+        pr_response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls",
+            params={"head": f"{owner}:{branch_name}", "state": "all"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        pr_url = None
+        pr_number = None
+        if pr_response.status_code == 200:
+            prs = pr_response.json()
+            if prs:
+                pr_url = prs[0]["html_url"]
+                pr_number = prs[0]["number"]
+                # Update the stored PR URL and set status to ready_to_merge
+                ui.pr_url = pr_url
+                ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
+                db.commit()
+        
+        return BranchStatusResponse(
+            branch_exists=True,
+            pr_url=pr_url,
+            pr_number=pr_number,
+            last_commit_sha=last_commit_sha
         )
