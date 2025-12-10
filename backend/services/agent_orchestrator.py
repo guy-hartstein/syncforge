@@ -53,10 +53,11 @@ If the changes have NOT been made yet, proceed with the implementation:
 2. Follow the integration-specific instructions carefully
 3. If you need clarification on any aspect of the update, ask a clear question and wait for a response before proceeding
 
-## Code Style Requirements
+## Code Style Requirements (MUST FOLLOW)
 
 **Keep edits extremely minimal, focused, and to the point.** Follow these principles:
-- Only change what is strictly necessary to implement the requested feature
+- Only change what is strictly necessary to implement the requested feature 
+- Never change things that are not related to the task at hand
 - Match the existing code style, patterns, and conventions of the project
 - When adding parameters, functions, or fields, keep them consistent with similar existing code
 - Do NOT create extraneous examples, READMEs, documentation files, or test files unless explicitly requested
