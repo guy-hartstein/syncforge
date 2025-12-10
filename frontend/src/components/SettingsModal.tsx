@@ -263,7 +263,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <p className="text-xs text-text-muted mb-3">
                     Create a PAT with <code className="text-accent">repo</code> scope from{' '}
                     <a
-                      href="https://github.com/settings/tokens/new?scopes=repo&description=Integration%20Copilot"
+                      href="https://github.com/settings/tokens/new?scopes=repo&description=Syncforge"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-accent hover:underline"

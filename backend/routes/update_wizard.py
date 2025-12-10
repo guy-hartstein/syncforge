@@ -1,14 +1,18 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from typing import Dict
 from datetime import datetime
 from langchain_core.messages import HumanMessage, AIMessage
+from sqlalchemy.orm import Session
 import uuid
 import os
 import aiofiles
+import httpx
 
+from database import get_db
+from models import UserSettings
 from schemas import (
     ChatRequest, ChatResponse, WizardSession, WizardStartResponse,
-    ChatMessage, Attachment, AttachmentUrlRequest, WizardConfigRequest
+    ChatMessage, Attachment, AttachmentUrlRequest, AttachmentPRRequest, WizardConfigRequest
 )
 from agents.update_agent import get_update_agent
 
@@ -76,17 +80,43 @@ async def chat(session_id: str, request: ChatRequest):
     # Add user message
     session["messages"].append({"role": "user", "content": request.message})
     
+    # Build attachment context if there are attachments with content
+    attachment_context = ""
+    attachments = session.get("attachments", [])
+    if attachments:
+        attachment_parts = []
+        for att in attachments:
+            if att.get("content"):
+                # PR or other content-rich attachment
+                attachment_parts.append(f"### {att['name']}\n{att['content']}")
+            elif att.get("url"):
+                # URL attachment
+                attachment_parts.append(f"- [{att['name']}]({att['url']})")
+        
+        if attachment_parts:
+            attachment_context = "\n\n---\n**ATTACHED REFERENCES:**\n" + "\n\n".join(attachment_parts) + "\n---\n"
+    
     # Convert to LangChain messages
     lc_messages = []
-    for msg in session["messages"]:
+    for i, msg in enumerate(session["messages"]):
+        content = msg["content"]
+        # Inject attachment context with the first user message
+        if i == 0 and msg["role"] == "user" and attachment_context:
+            content = content + attachment_context
+        # Also inject if attachments were just added (last user message)
+        elif i == len(session["messages"]) - 1 and msg["role"] == "user" and attachment_context:
+            # Check if this message doesn't already have attachment context
+            if "ATTACHED REFERENCES:" not in content:
+                content = content + attachment_context
+        
         if msg["role"] == "user":
-            lc_messages.append(HumanMessage(content=msg["content"]))
+            lc_messages.append(HumanMessage(content=content))
         else:
-            lc_messages.append(AIMessage(content=msg["content"]))
+            lc_messages.append(AIMessage(content=content))
     
     # Get agent response
     agent = get_update_agent()
-    result = agent.chat(lc_messages, session["clarification_count"])
+    result = agent.chat(lc_messages, session["clarification_count"], attachments)
     
     # Update session
     session["messages"].append({"role": "assistant", "content": result["response"]})
@@ -159,6 +189,92 @@ async def add_url(session_id: str, request: AttachmentUrlRequest):
         "name": name,
         "url": request.url,
         "file_path": None
+    }
+    sessions[session_id]["attachments"].append(attachment)
+    
+    return Attachment(**attachment)
+
+
+@router.post("/{session_id}/attachments/pr")
+async def add_pr_attachment(session_id: str, request: AttachmentPRRequest, db: Session = Depends(get_db)):
+    """Add a GitHub PR attachment with its diff content."""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get GitHub token
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.github_pat:
+        raise HTTPException(status_code=401, detail="GitHub not connected")
+    
+    token = settings.github_pat
+    
+    # Fetch PR details and diff
+    async with httpx.AsyncClient() as client:
+        # Fetch PR details
+        pr_response = await client.get(
+            f"https://api.github.com/repos/{request.owner}/{request.repo}/pulls/{request.pr_number}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        if pr_response.status_code == 401:
+            raise HTTPException(status_code=401, detail="GitHub token expired or invalid")
+        
+        if pr_response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Pull request not found")
+        
+        if pr_response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch pull request")
+        
+        pr_data = pr_response.json()
+        
+        # Fetch the diff
+        diff_response = await client.get(
+            f"https://api.github.com/repos/{request.owner}/{request.repo}/pulls/{request.pr_number}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3.diff",
+            },
+            timeout=30.0
+        )
+        
+        diff_content = ""
+        if diff_response.status_code == 200:
+            diff_content = diff_response.text
+            # Truncate very large diffs
+            max_diff_size = 100000
+            if len(diff_content) > max_diff_size:
+                diff_content = diff_content[:max_diff_size] + "\n\n... [diff truncated due to size] ..."
+    
+    # Build comprehensive PR content for the agent
+    pr_body = pr_data.get("body") or "No description provided."
+    content = f"""## Pull Request #{request.pr_number}: {pr_data['title']}
+
+**Repository:** {request.owner}/{request.repo}
+**Branch:** {pr_data['head']['ref']} → {pr_data['base']['ref']}
+**Author:** {pr_data['user']['login']}
+**Status:** {pr_data['state']}
+**Changes:** +{pr_data.get('additions', 0)} -{pr_data.get('deletions', 0)} in {pr_data.get('changed_files', 0)} files
+
+### Description
+{pr_body}
+
+### Diff
+```diff
+{diff_content}
+```
+"""
+    
+    attachment = {
+        "id": str(uuid.uuid4()),
+        "type": "github_pr",
+        "name": f"PR #{request.pr_number}: {request.title}",
+        "url": request.url,
+        "file_path": None,
+        "content": content
     }
     sessions[session_id]["attachments"].append(attachment)
     

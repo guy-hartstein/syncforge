@@ -17,6 +17,20 @@ export interface GitHubRepo {
   default_branch: string
 }
 
+export interface GitHubPullRequest {
+  id: number
+  number: number
+  title: string
+  html_url: string
+  state: string
+  user_login: string
+  created_at: string
+  updated_at: string
+  draft: boolean
+  head_ref: string
+  base_ref: string
+}
+
 export interface GitHubStatus {
   connected: boolean
   username: string | null
@@ -66,4 +80,23 @@ export async function listGitHubRepos(): Promise<GitHubRepo[]> {
   }
   const data = await response.json()
   return data.repos
+}
+
+export async function listRepoPullRequests(
+  owner: string,
+  repo: string,
+  state: 'open' | 'closed' | 'all' = 'open'
+): Promise<GitHubPullRequest[]> {
+  const response = await fetch(`${API_BASE}/repos/${owner}/${repo}/pulls?state=${state}`)
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('GitHub not connected')
+    }
+    if (response.status === 404) {
+      throw new Error('Repository not found')
+    }
+    throw new Error('Failed to fetch pull requests')
+  }
+  const data = await response.json()
+  return data.pull_requests
 }

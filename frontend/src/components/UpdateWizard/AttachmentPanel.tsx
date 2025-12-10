@@ -1,25 +1,39 @@
 import { useState, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link2, Upload, X, FileText, Github, ExternalLink, Plus } from 'lucide-react'
+import { Link2, Upload, X, FileText, ExternalLink, Plus, GitPullRequest } from 'lucide-react'
 import type { Attachment } from '../../api/wizard'
+import { GitHubPRPicker } from './GitHubPRPicker'
+
+interface PRSelection {
+  owner: string
+  repo: string
+  pr_number: number
+  title: string
+  url: string
+}
 
 interface AttachmentPanelProps {
   attachments: Attachment[]
   onUploadFile: (file: File) => void
-  onAddUrl: (url: string) => void
+  onAddUrl: (url: string, name?: string) => void
+  onAddPR: (pr: PRSelection) => void
   onRemove: (id: string) => void
   isUploading: boolean
+  isAddingPR?: boolean
 }
 
 export function AttachmentPanel({
   attachments,
   onUploadFile,
   onAddUrl,
+  onAddPR,
   onRemove,
-  isUploading
+  isUploading,
+  isAddingPR = false
 }: AttachmentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
+  const [showPRPicker, setShowPRPicker] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -55,15 +69,33 @@ export function AttachmentPanel({
     }
   }
 
-  const isGitHubPR = (url: string) => {
-    return url.includes('github.com') && url.includes('/pull/')
+  const handleAddPR = (pr: { url: string; title: string; number: number; repo: string }) => {
+    const [owner, repo] = pr.repo.split('/')
+    onAddPR({
+      owner,
+      repo,
+      pr_number: pr.number,
+      title: pr.title,
+      url: pr.url
+    })
+  }
+
+  const isGitHubPR = (url: string, type?: string) => {
+    return type === 'github_pr' || (url?.includes('github.com') && url?.includes('/pull/'))
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-text-secondary">Attachments</h3>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setShowPRPicker(true)}
+            className="p-1.5 rounded-lg hover:bg-green-500/10 text-text-muted hover:text-green-400 transition-colors"
+            title="Link GitHub PR"
+          >
+            <GitPullRequest size={16} />
+          </button>
           <button
             onClick={() => setShowUrlInput(true)}
             className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
@@ -153,14 +185,14 @@ export function AttachmentPanel({
               className="flex items-center gap-3 p-3 bg-surface rounded-lg border border-border group"
             >
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                isGitHubPR(attachment.url || '')
+                isGitHubPR(attachment.url || '', attachment.type)
                   ? 'bg-green-500/10'
                   : attachment.type === 'url'
                   ? 'bg-blue-500/10'
                   : 'bg-amber-500/10'
               }`}>
-                {isGitHubPR(attachment.url || '') ? (
-                  <Github size={16} className="text-green-400" />
+                {isGitHubPR(attachment.url || '', attachment.type) ? (
+                  <GitPullRequest size={16} className="text-green-400" />
                 ) : attachment.type === 'url' ? (
                   <ExternalLink size={16} className="text-blue-400" />
                 ) : (
@@ -200,7 +232,23 @@ export function AttachmentPanel({
             <p className="text-sm text-text-muted">Uploading...</p>
           </div>
         )}
+
+        {isAddingPR && (
+          <div className="flex items-center gap-3 p-3 bg-surface rounded-lg border border-border">
+            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="text-sm text-text-muted">Fetching PR diff...</p>
+          </div>
+        )}
       </div>
+
+      {/* GitHub PR Picker Modal */}
+      <GitHubPRPicker
+        isOpen={showPRPicker}
+        onClose={() => setShowPRPicker(false)}
+        onSelectPR={handleAddPR}
+      />
     </div>
   )
 }

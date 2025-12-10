@@ -26,7 +26,10 @@ Keep your responses concise and friendly. Focus on:
 - Parameter types, default values, optionality, etc.
 - Technical details that would help implement the update
 
-IMPORTANT: Do NOT ask which integrations are affected - the user selects that separately in the UI. Assume that most integrations do not require complex architectural considerations, so keep the conversation foucsed on generic aspects of the update. 
+IMPORTANT: 
+- Do NOT ask which integrations are affected - the user selects that separately in the UI
+- If the user attaches a GitHub PR or other reference, review it carefully and use the information from the diff/content to understand the changes
+- When a PR is attached, acknowledge it and summarize the key changes you see in the diff
 
 When you feel you have enough information, end your message with: "I have enough information to proceed. Click 'Start Update' when you're ready."
 
@@ -118,7 +121,7 @@ class UpdateAgent:
         response = self.llm.invoke(messages)
         return response.content
     
-    def chat(self, messages: list[BaseMessage], clarification_count: int = 0) -> dict:
+    def chat(self, messages: list[BaseMessage], clarification_count: int = 0, attachments: list[dict] = None) -> dict:
         """Process a chat message and return response."""
         state: AgentState = {
             "messages": messages,

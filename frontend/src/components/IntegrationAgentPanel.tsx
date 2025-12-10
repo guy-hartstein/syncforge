@@ -364,7 +364,7 @@ export function IntegrationAgentPanel({
             {displayMessages.length === 0 ? (
               <p className="text-sm text-text-muted text-center py-4">
                 {integration.cursor_agent_id
-                  ? 'Agent is starting...'
+                  ? 'Agent is coding...'
                   : 'No conversation yet. Start the agent to begin.'}
               </p>
             ) : (

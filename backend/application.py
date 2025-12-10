@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
+import models  # noqa: F401 - Import models to register them with Base before create_all
 from routes.github import router as github_router
 from routes.integrations import router as integrations_router
 from routes.update_wizard import router as wizard_router

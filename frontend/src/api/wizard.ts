@@ -7,10 +7,11 @@ export interface ChatMessage {
 
 export interface Attachment {
   id: string
-  type: 'file' | 'url'
+  type: 'file' | 'url' | 'github_pr'
   name: string
   url?: string
   file_path?: string
+  content?: string
 }
 
 export interface WizardSession {
@@ -75,6 +76,27 @@ export async function addUrl(sessionId: string, url: string, name?: string): Pro
     body: JSON.stringify({ url, name }),
   })
   if (!response.ok) throw new Error('Failed to add URL')
+  return response.json()
+}
+
+export interface PRAttachmentRequest {
+  owner: string
+  repo: string
+  pr_number: number
+  title: string
+  url: string
+}
+
+export async function addPRAttachment(sessionId: string, pr: PRAttachmentRequest): Promise<Attachment> {
+  const response = await fetch(`${API_BASE}/${sessionId}/attachments/pr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pr),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to add PR' }))
+    throw new Error(error.detail || 'Failed to add PR attachment')
+  }
   return response.json()
 }
 

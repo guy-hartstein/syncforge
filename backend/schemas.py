@@ -45,15 +45,24 @@ class ChatResponse(BaseModel):
 
 class Attachment(BaseModel):
     id: str
-    type: str  # "file" or "url"
+    type: str  # "file", "url", or "github_pr"
     name: str
     url: Optional[str] = None
     file_path: Optional[str] = None
+    content: Optional[str] = None  # For storing PR diff or other content
 
 
 class AttachmentUrlRequest(BaseModel):
     url: str
     name: Optional[str] = None
+
+
+class AttachmentPRRequest(BaseModel):
+    owner: str
+    repo: str
+    pr_number: int
+    title: str
+    url: str
 
 
 class IntegrationConfig(BaseModel):

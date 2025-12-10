@@ -10,9 +10,11 @@ import {
   sendMessage,
   uploadFile,
   addUrl,
+  addPRAttachment,
   removeAttachment,
   type ChatMessage,
-  type Attachment
+  type Attachment,
+  type PRAttachmentRequest
 } from '../../api/wizard'
 import { createUpdate } from '../../api/updates'
 import type { Integration } from '../../types'
@@ -33,6 +35,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
   const [readyToProceed, setReadyToProceed] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [isAddingPR, setIsAddingPR] = useState(false)
   const [settingsIntegration, setSettingsIntegration] = useState<Integration | null>(null)
   const [autoCreatePr, setAutoCreatePr] = useState(false)
 
@@ -91,14 +94,28 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
     }
   }, [sessionId])
 
-  const handleAddUrl = useCallback(async (url: string) => {
+  const handleAddUrl = useCallback(async (url: string, name?: string) => {
     if (!sessionId) return
 
     try {
-      const attachment = await addUrl(sessionId, url)
+      const attachment = await addUrl(sessionId, url, name)
       setAttachments(prev => [...prev, attachment])
     } catch (error) {
       console.error('Failed to add URL:', error)
+    }
+  }, [sessionId])
+
+  const handleAddPR = useCallback(async (pr: PRAttachmentRequest) => {
+    if (!sessionId) return
+
+    setIsAddingPR(true)
+    try {
+      const attachment = await addPRAttachment(sessionId, pr)
+      setAttachments(prev => [...prev, attachment])
+    } catch (error) {
+      console.error('Failed to add PR:', error)
+    } finally {
+      setIsAddingPR(false)
     }
   }, [sessionId])
 
@@ -230,8 +247,10 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
                       attachments={attachments}
                       onUploadFile={handleUploadFile}
                       onAddUrl={handleAddUrl}
+                      onAddPR={handleAddPR}
                       onRemove={handleRemoveAttachment}
                       isUploading={isUploading}
+                      isAddingPR={isAddingPR}
                     />
                     
                     <div className="border-t border-border pt-6">
