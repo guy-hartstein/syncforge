@@ -2,8 +2,6 @@
 
 A tool for managing software integrations and automating synchronized updates across multiple GitHub repositories using cloud coding agents (powered by Cursor Cloud Agents).
 
-<img width="705" height="807" alt="image" src="https://github.com/user-attachments/assets/bd90a064-df09-4336-9461-419669b37ee9" />
-
 ---
 
 ## Part 1: What is SyncForge?
@@ -15,14 +13,11 @@ SyncForge helps teams maintain consistency across multiple codebases by:
 - Orchestrating Cursor Cloud Agents to implement changes automatically
 - Creating pull requests across all affected repositories
 
-<img width="1102" height="880" alt="Screenshot 2025-12-10 at 4 16 18 PM" src="https://github.com/user-attachments/assets/f1eae803-5dcf-4f5a-947d-0f4f8317a517" />
-
-<img width="691" height="417" alt="image" src="https://github.com/user-attachments/assets/9c6dc424-dab6-4e1a-96c3-3fdea27f5e8c" />
-<img width="756" height="878" alt="Screenshot 2025-12-10 at 4 15 27 PM" src="https://github.com/user-attachments/assets/3fefc4ca-7ae6-422a-8b10-671ed2a15cde" />
-
 ### Adding Integrations
 
 Integrations represent codebases you want to keep synchronized. Each integration links to one or more GitHub repositories.
+
+<img width="691" height="417" alt="image" src="https://github.com/user-attachments/assets/9c6dc424-dab6-4e1a-96c3-3fdea27f5e8c" />
 
 **To add an integration:**
 
@@ -46,6 +41,8 @@ Integrations represent codebases you want to keep synchronized. Each integration
 ### Using the Update Wizard
 
 The Update Wizard guides you through defining changes that will be applied across all selected integrations.
+
+<img width="1102" height="880" alt="Screenshot 2025-12-10 at 4 16 18 PM" src="https://github.com/user-attachments/assets/f1eae803-5dcf-4f5a-947d-0f4f8317a517" />
 
 **Starting the wizard:**
 
@@ -89,6 +86,8 @@ Once the AI indicates it's ready (the "Start Update" button becomes enabled), cl
 
 After creating an update, SyncForge launches Cursor Cloud Agents to implement changes across your integrations. The dashboard provides real-time monitoring.
 
+<img width="705" height="807" alt="image" src="https://github.com/user-attachments/assets/bd90a064-df09-4336-9461-419669b37ee9" />
+
 **Update card:**
 
 Each update shows:
@@ -115,6 +114,8 @@ Click an integration to expand its agent panel:
 - **Conversation**: See the agent's progress and any messages
 - **Branch link**: Direct link to the working branch on GitHub
 - **PR link**: Link to the created pull request (if auto-create is enabled)
+
+<img width="756" height="878" alt="Screenshot 2025-12-10 at 4 15 27 PM" src="https://github.com/user-attachments/assets/3fefc4ca-7ae6-422a-8b10-671ed2a15cde" />
 
 **Interacting with agents:**
 
