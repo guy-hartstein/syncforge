@@ -34,7 +34,7 @@ If the changes have NOT been made yet, proceed with the implementation:
 2. Follow the integration-specific instructions carefully
 3. If you need clarification on any aspect of the update, ask a clear question and wait for a response before proceeding
 
-When you're done (or if no changes were needed), create a branch with your changes. The branch name should be descriptive of the changes made.
+**CRITICAL: When you're done, you MUST push your changes to a remote branch.** Create a branch with a descriptive name and push it to the remote repository. Do not end the task until the branch has been pushed.
 """
 
 

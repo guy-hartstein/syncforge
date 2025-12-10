@@ -3,6 +3,8 @@ const API_BASE = 'http://localhost:8000/api/settings'
 export interface UserSettings {
   id: string
   has_cursor_api_key: boolean
+  github_connected: boolean
+  github_username: string | null
   created_at: string
   updated_at: string
 }

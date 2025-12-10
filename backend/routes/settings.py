@@ -36,6 +36,8 @@ def get_settings(db: Session = Depends(get_db)):
     return UserSettingsResponse(
         id=settings.id,
         has_cursor_api_key=bool(settings.cursor_api_key),
+        github_connected=bool(settings.github_pat),
+        github_username=settings.github_username,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )
@@ -59,6 +61,8 @@ def update_settings(
     return UserSettingsResponse(
         id=settings.id,
         has_cursor_api_key=bool(settings.cursor_api_key),
+        github_connected=bool(settings.github_pat),
+        github_username=settings.github_username,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )

@@ -207,11 +207,32 @@ class UserSettingsUpdate(UserSettingsBase):
 class UserSettingsResponse(BaseModel):
     id: str
     has_cursor_api_key: bool  # Don't expose actual key
+    github_connected: bool = False  # Whether GitHub PAT is configured
+    github_username: Optional[str] = None  # GitHub username if connected
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# GitHub Schemas
+class GitHubPATRequest(BaseModel):
+    token: str
+
+
+class GitHubRepo(BaseModel):
+    id: int
+    name: str
+    full_name: str
+    html_url: str
+    private: bool
+    description: Optional[str] = None
+    default_branch: str = "main"
+
+
+class GitHubReposResponse(BaseModel):
+    repos: List[GitHubRepo]
 
 
 class TestConnectionResponse(BaseModel):

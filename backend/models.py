@@ -78,6 +78,8 @@ class UserSettings(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     cursor_api_key = Column(Text, nullable=True)  # Encrypted Cursor API key
+    github_pat = Column(Text, nullable=True)  # GitHub Personal Access Token
+    github_username = Column(String(255), nullable=True)  # GitHub username
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

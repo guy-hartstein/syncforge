@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Layers, Sparkles, Rocket, RefreshCw, Settings } from 'lucide-react'
+import { Plus, Layers, Rocket, RefreshCw, Settings } from 'lucide-react'
+import { Logo } from './Logo'
 import { IntegrationCard } from './IntegrationCard'
 import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
@@ -123,6 +124,11 @@ export function OnboardingPage() {
       {/* Subtle gradient background */}
       <div className="fixed inset-0 bg-gradient-to-br from-accent/5 via-transparent to-transparent pointer-events-none" />
       
+      {/* Logo in top right */}
+      <div className="fixed top-6 right-6 pointer-events-none opacity-20">
+        <Logo size={120} />
+      </div>
+      
       <div className="relative max-w-5xl mx-auto px-6 py-12">
         {/* Header */}
         <motion.header
@@ -131,14 +137,9 @@ export function OnboardingPage() {
           className="mb-12"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-text-primary">Integration Copilot</h1>
-                <p className="text-sm text-text-muted">Manage and update your integrations</p>
-              </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-text-primary">SyncForge</h1>
+              <p className="text-sm text-text-muted">Manage and update your integrations</p>
             </div>
             <div className="flex items-center gap-3">
               <button

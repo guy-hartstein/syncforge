@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, useFieldArray } from 'react-hook-form'
-import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2 } from 'lucide-react'
+import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2, Search, Lock, Globe, Settings } from 'lucide-react'
 import type { Integration, IntegrationCreate } from '../types'
-import { checkGitHubRepo } from '../api/github'
+import { checkGitHubRepo, getGitHubStatus, listGitHubRepos, type GitHubRepo, type GitHubStatus } from '../api/github'
 import { useToast } from './Toast'
 
 interface AddIntegrationModalProps {
@@ -11,6 +11,7 @@ interface AddIntegrationModalProps {
   onClose: () => void
   onSubmit: (data: IntegrationCreate) => void
   editingIntegration?: Integration | null
+  onOpenSettings?: () => void
 }
 
 interface FormData {
@@ -27,9 +28,14 @@ interface LinkValidation {
   error?: string
 }
 
-export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegration }: AddIntegrationModalProps) {
+export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegration, onOpenSettings }: AddIntegrationModalProps) {
   const [linkValidations, setLinkValidations] = useState<Record<number, LinkValidation>>({})
   const [showGitHubPrompt, setShowGitHubPrompt] = useState(false)
+  const [showRepoSelector, setShowRepoSelector] = useState(false)
+  const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null)
+  const [repos, setRepos] = useState<GitHubRepo[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [repoSearch, setRepoSearch] = useState('')
   const toast = useToast()
 
   const {
@@ -38,6 +44,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
@@ -53,6 +60,59 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
   })
 
   const watchedLinks = watch('github_links')
+
+  // Load GitHub status on mount
+  useEffect(() => {
+    if (isOpen) {
+      getGitHubStatus()
+        .then(setGithubStatus)
+        .catch(() => setGithubStatus({ connected: false, username: null }))
+    }
+  }, [isOpen])
+
+  // Load repos when repo selector is opened
+  useEffect(() => {
+    if (showRepoSelector && githubStatus?.connected && repos.length === 0) {
+      setLoadingRepos(true)
+      listGitHubRepos()
+        .then(setRepos)
+        .catch(() => {
+          toast.error('Failed to load repositories')
+          setShowRepoSelector(false)
+        })
+        .finally(() => setLoadingRepos(false))
+    }
+  }, [showRepoSelector, githubStatus?.connected])
+
+  // Filter repos based on search
+  const filteredRepos = useMemo(() => {
+    if (!repoSearch.trim()) return repos
+    const search = repoSearch.toLowerCase()
+    return repos.filter(repo => 
+      repo.name.toLowerCase().includes(search) ||
+      repo.full_name.toLowerCase().includes(search) ||
+      (repo.description?.toLowerCase().includes(search))
+    )
+  }, [repos, repoSearch])
+
+  // Check if a repo is already selected
+  const isRepoSelected = useCallback((repoUrl: string) => {
+    return watchedLinks.some(link => link.value === repoUrl)
+  }, [watchedLinks])
+
+  // Add repo from selector
+  const handleSelectRepo = useCallback((repo: GitHubRepo) => {
+    if (isRepoSelected(repo.html_url)) return
+    
+    const emptyIndex = watchedLinks.findIndex(link => !link.value.trim())
+    if (emptyIndex >= 0) {
+      setValue(`github_links.${emptyIndex}.value`, repo.html_url)
+    } else {
+      append({ value: repo.html_url })
+    }
+    setShowRepoSelector(false)
+    setRepoSearch('')
+  }, [watchedLinks, append, setValue, isRepoSelected])
 
   // Debounced validation for GitHub links
   const validateLink = useCallback(async (index: number, url: string) => {
@@ -77,10 +137,17 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
           [index]: { status: 'public', repoName: result.repo_name || undefined }
         }))
       } else {
-        setLinkValidations(prev => ({
-          ...prev,
-          [index]: { status: 'private', repoName: result.repo_name || undefined, error: result.error || undefined }
-        }))
+        if (githubStatus?.connected) {
+          setLinkValidations(prev => ({
+            ...prev,
+            [index]: { status: 'private', repoName: result.repo_name || undefined }
+          }))
+        } else {
+          setLinkValidations(prev => ({
+            ...prev,
+            [index]: { status: 'private', repoName: result.repo_name || undefined, error: result.error || undefined }
+          }))
+        }
       }
     } catch {
       setLinkValidations(prev => ({
@@ -88,7 +155,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
         [index]: { status: 'invalid', error: 'Failed to check repository' }
       }))
     }
-  }, [])
+  }, [githubStatus?.connected])
 
   // Watch for link changes and validate with debounce
   useEffect(() => {
@@ -97,7 +164,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
     watchedLinks.forEach((link, index) => {
       const timeout = setTimeout(() => {
         validateLink(index, link.value)
-      }, 500) // 500ms debounce
+      }, 500)
       timeouts.push(timeout)
     })
 
@@ -133,7 +200,6 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
 
   const handleRemoveLink = (index: number) => {
     remove(index)
-    // Clean up validation state
     setLinkValidations(prev => {
       const newValidations: Record<number, LinkValidation> = {}
       Object.entries(prev).forEach(([key, value]) => {
@@ -148,6 +214,15 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
     })
   }
 
+  const handleLinkGitHub = () => {
+    if (onOpenSettings) {
+      onClose()
+      onOpenSettings()
+    } else {
+      toast.info('Go to Settings to add your GitHub Personal Access Token')
+    }
+  }
+
   const getStatusIcon = (index: number) => {
     const validation = linkValidations[index]
     if (!validation) return null
@@ -158,6 +233,13 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
       case 'public':
         return <Check size={16} className="text-green-400" />
       case 'private':
+        if (githubStatus?.connected) {
+          return (
+            <span title="Private repository (you have access)">
+              <Lock size={16} className="text-amber-400" />
+            </span>
+          )
+        }
         return (
           <button
             type="button"
@@ -242,9 +324,27 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    GitHub Links
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-text-secondary">
+                      GitHub Repositories
+                    </label>
+                    {githubStatus?.connected ? (
+                      <span className="text-xs text-green-400 flex items-center gap-1">
+                        <Check size={12} />
+                        Connected as {githubStatus.username}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleLinkGitHub}
+                        className="text-xs text-accent hover:text-accent-hover flex items-center gap-1 transition-colors"
+                      >
+                        <Github size={12} />
+                        Link GitHub
+                      </button>
+                    )}
+                  </div>
+                  
                   <div className="space-y-2">
                     {fields.map((field, index) => (
                       <div key={field.id}>
@@ -276,14 +376,30 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                       </div>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => append({ value: '' })}
-                    className="mt-2 flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors"
-                  >
-                    <Plus size={14} />
-                    Add another link
-                  </button>
+                  
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => append({ value: '' })}
+                      className="flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors"
+                    >
+                      <Plus size={14} />
+                      Add manually
+                    </button>
+                    {githubStatus?.connected && (
+                      <>
+                        <span className="text-text-muted">•</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRepoSelector(true)}
+                          className="flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors"
+                        >
+                          <Search size={14} />
+                          Browse repositories
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -310,7 +426,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
             </motion.div>
           </div>
 
-          {/* GitHub Link Prompt Modal */}
+          {/* GitHub Link Prompt Modal (for private repos) */}
           <AnimatePresence>
             {showGitHubPrompt && (
               <>
@@ -335,7 +451,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                       <h3 className="text-lg font-semibold text-text-primary">Private Repository</h3>
                     </div>
                     <p className="text-text-secondary text-sm mb-6">
-                      This repository appears to be private. To access private repositories, you'll need to link your GitHub account.
+                      This repository appears to be private. To access private repositories, add your GitHub Personal Access Token in Settings.
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -346,15 +462,122 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                       </button>
                       <button
                         onClick={() => {
-                          // TODO: Implement GitHub OAuth
-                          toast.info('GitHub OAuth coming soon!')
                           setShowGitHubPrompt(false)
+                          handleLinkGitHub()
                         }}
                         className="btn-primary flex-1 flex items-center justify-center gap-2"
                       >
-                        <Github size={16} />
-                        Link GitHub
+                        <Settings size={16} />
+                        Open Settings
                       </button>
+                    </div>
+                  </motion.div>
+                </div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Repository Selector Modal */}
+          <AnimatePresence>
+            {showRepoSelector && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/40 z-[60]"
+                  onClick={() => {
+                    setShowRepoSelector(false)
+                    setRepoSearch('')
+                  }}
+                />
+                <div className="fixed inset-0 flex items-center justify-center z-[70] p-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl overflow-hidden"
+                  >
+                    <div className="px-4 py-3 border-b border-border">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-text-primary">Select Repository</h3>
+                        <button
+                          onClick={() => {
+                            setShowRepoSelector(false)
+                            setRepoSearch('')
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                          type="text"
+                          placeholder="Search repositories..."
+                          value={repoSearch}
+                          onChange={(e) => setRepoSearch(e.target.value)}
+                          className="input pl-10"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="max-h-80 overflow-y-auto">
+                      {loadingRepos ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-8 h-8 text-accent animate-spin" />
+                        </div>
+                      ) : filteredRepos.length === 0 ? (
+                        <div className="text-center py-12 text-text-muted">
+                          {repoSearch ? 'No repositories found' : 'No repositories available'}
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-border">
+                          {filteredRepos.map((repo) => {
+                            const selected = isRepoSelected(repo.html_url)
+                            return (
+                              <button
+                                key={repo.id}
+                                type="button"
+                                onClick={() => handleSelectRepo(repo)}
+                                disabled={selected}
+                                className={`w-full px-4 py-3 text-left hover:bg-surface-hover transition-colors ${
+                                  selected ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="mt-0.5">
+                                    {repo.private ? (
+                                      <Lock size={16} className="text-amber-400" />
+                                    ) : (
+                                      <Globe size={16} className="text-green-400" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-text-primary truncate">
+                                        {repo.full_name}
+                                      </span>
+                                      {selected && (
+                                        <span className="text-xs text-green-400 flex-shrink-0">
+                                          Added
+                                        </span>
+                                      )}
+                                    </div>
+                                    {repo.description && (
+                                      <p className="text-sm text-text-muted truncate mt-0.5">
+                                        {repo.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 </div>
