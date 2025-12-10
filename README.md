@@ -2,6 +2,9 @@
 
 A tool for managing software integrations and automating synchronized updates across multiple GitHub repositories using cloud coding agents (powered by Cursor Cloud Agents).
 
+<img width="705" height="807" alt="image" src="https://github.com/user-attachments/assets/bd90a064-df09-4336-9461-419669b37ee9" />
+
+
 ## Overview
 
 SyncForge helps teams maintain consistency across multiple codebases by:
@@ -10,6 +13,12 @@ SyncForge helps teams maintain consistency across multiple codebases by:
 - Using an AI-powered wizard to understand update requirements
 - Orchestrating Cursor Cloud Agents to implement changes automatically
 - Creating pull requests across all affected repositories
+
+<img width="1102" height="880" alt="Screenshot 2025-12-10 at 4 16 18 PM" src="https://github.com/user-attachments/assets/f1eae803-5dcf-4f5a-947d-0f4f8317a517" />
+
+<img width="691" height="417" alt="image" src="https://github.com/user-attachments/assets/9c6dc424-dab6-4e1a-96c3-3fdea27f5e8c" />
+<img width="756" height="878" alt="Screenshot 2025-12-10 at 4 15 27 PM" src="https://github.com/user-attachments/assets/3fefc4ca-7ae6-422a-8b10-671ed2a15cde" />
+
 
 ## Architecture
 
