@@ -53,7 +53,18 @@ If the changes have NOT been made yet, proceed with the implementation:
 2. Follow the integration-specific instructions carefully
 3. If you need clarification on any aspect of the update, ask a clear question and wait for a response before proceeding
 
-**CRITICAL: When you're done, you MUST push your changes to a remote branch.** Create a branch with a descriptive name and push it to the remote repository. Do not end the task until the branch has been pushed.
+## Code Style Requirements
+
+**Keep edits extremely minimal, focused, and to the point.** Follow these principles:
+- Only change what is strictly necessary to implement the requested feature
+- Match the existing code style, patterns, and conventions of the project
+- When adding parameters, functions, or fields, keep them consistent with similar existing code
+- Do NOT create extraneous examples, READMEs, documentation files, or test files unless explicitly requested
+- Do NOT refactor, reorganize, or "improve" code that is unrelated to the task
+- Do NOT add extra error handling, validation, or features beyond what was requested
+- Aim for changes that fit seamlessly into the codebase as if a team member wrote them
+
+**CRITICAL: When you're done, you MUST push your changes to the following branch: `{branch_name}`**. Push to this exact branch name. Do not end the task until the branch has been pushed.
 """
 
 
@@ -68,6 +79,7 @@ class AgentOrchestrator:
         self,
         implementation_guide: str,
         integration: Integration,
+        branch_name: str,
         custom_instructions: str = ""
     ) -> str:
         """
@@ -76,6 +88,7 @@ class AgentOrchestrator:
         Args:
             implementation_guide: The implementation guide from the update
             integration: The integration to update
+            branch_name: The branch name to push changes to
             custom_instructions: Per-integration custom instructions
         
         Returns:
@@ -88,7 +101,8 @@ class AgentOrchestrator:
             integration_name=integration.name,
             github_links=github_links_str,
             integration_instructions=integration.instructions or "No specific instructions.",
-            custom_instructions=custom_instructions or "No additional instructions for this update."
+            custom_instructions=custom_instructions or "No additional instructions for this update.",
+            branch_name=branch_name
         )
     
     async def start_agent_for_integration(
@@ -123,6 +137,7 @@ class AgentOrchestrator:
         prompt = self.build_agent_prompt(
             implementation_guide=update.implementation_guide,
             integration=integration,
+            branch_name=branch_name,
             custom_instructions=update_integration.custom_instructions
         )
         
