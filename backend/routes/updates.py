@@ -18,11 +18,16 @@ def get_integration_statuses_with_names(db: Session, update: Update) -> List[Upd
     result = []
     for ui in update.integration_statuses:
         integration = db.query(Integration).filter(Integration.id == ui.integration_id).first()
+        # Get the first GitHub link for branch URL construction
+        github_url = None
+        if integration and integration.github_links:
+            github_url = integration.github_links[0]
         result.append(UpdateIntegrationResponse(
             id=ui.id,
             update_id=ui.update_id,
             integration_id=ui.integration_id,
             integration_name=integration.name if integration else None,
+            github_url=github_url,
             status=ui.status,
             pr_url=ui.pr_url,
             agent_question=ui.agent_question,
@@ -127,7 +132,8 @@ def create_update(
         db_update_integration = UpdateIntegration(
             update_id=db_update.id,
             integration_id=integration_id,
-            custom_instructions=custom_instructions
+            custom_instructions=custom_instructions,
+            auto_create_pr=update_data.auto_create_pr or False  # Inherit from update-level setting
         )
         db.add(db_update_integration)
     

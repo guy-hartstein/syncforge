@@ -4,6 +4,7 @@ Cursor Cloud Agents API Client
 Based on: https://cursor.com/docs/cloud-agent/api/endpoints
 """
 
+import asyncio
 import httpx
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -47,6 +48,8 @@ class CursorClient:
     """Client for interacting with Cursor Cloud Agents API."""
     
     BASE_URL = "https://api.cursor.com"
+    BASE_DELAY = 1.0  # seconds
+    MAX_DELAY = 30.0  # cap delay at 30 seconds
     
     def __init__(self, api_key: str):
         """Initialize client with user's API key."""
@@ -66,6 +69,22 @@ class CursorClient:
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
+    
+    async def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Make a request with retry logic for rate limiting."""
+        attempt = 0
+        while True:
+            response = await self._client.request(method, url, **kwargs)
+            
+            if response.status_code == 429:
+                # Rate limited - wait and retry with exponential backoff (capped)
+                delay = min(self.BASE_DELAY * (2 ** attempt), self.MAX_DELAY)
+                print(f"Rate limited (429), retrying in {delay}s...")
+                await asyncio.sleep(delay)
+                attempt += 1
+                continue
+            
+            return response
     
     async def test_connection(self) -> Dict[str, Any]:
         """Test the API connection and return key info."""
@@ -87,6 +106,7 @@ class CursorClient:
         prompt: str,
         ref: Optional[str] = None,
         auto_create_pr: bool = False,
+        branch_name: Optional[str] = None,
         model: Optional[str] = None
     ) -> str:
         """
@@ -97,6 +117,7 @@ class CursorClient:
             prompt: The task prompt for the agent
             ref: Git ref to work from (default: tries "main", then "master")
             auto_create_pr: Whether to automatically create a PR when done
+            branch_name: Custom branch name for the agent to use
             model: Optional model name (defaults to auto-selection)
         
         Returns:
@@ -107,6 +128,14 @@ class CursorClient:
         
         last_error = None
         for try_ref in refs_to_try:
+            target = {
+                "autoCreatePr": auto_create_pr,
+                "openAsCursorGithubApp": True,
+                "skipReviewerRequest": False
+            }
+            if branch_name:
+                target["branchName"] = branch_name
+            
             payload = {
                 "prompt": {
                     "text": prompt
@@ -115,11 +144,7 @@ class CursorClient:
                     "repository": repository,
                     "ref": try_ref
                 },
-                "target": {
-                    "autoCreatePr": auto_create_pr,
-                    "openAsCursorGithubApp": True,
-                    "skipReviewerRequest": False
-                }
+                "target": target
             }
             
             if model:
@@ -153,7 +178,7 @@ class CursorClient:
         Returns:
             AgentInfo with current status and details
         """
-        response = await self._client.get(f"/v0/agents/{agent_id}")
+        response = await self._request_with_retry("GET", f"/v0/agents/{agent_id}")
         
         if response.status_code == 404:
             raise CursorClientError(f"Agent not found: {agent_id}")
@@ -184,7 +209,7 @@ class CursorClient:
         Returns:
             List of conversation messages
         """
-        response = await self._client.get(f"/v0/agents/{agent_id}/conversation")
+        response = await self._request_with_retry("GET", f"/v0/agents/{agent_id}/conversation")
         
         if response.status_code == 404:
             raise CursorClientError(f"Agent or conversation not found: {agent_id}")

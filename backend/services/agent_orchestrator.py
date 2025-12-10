@@ -2,11 +2,30 @@
 Agent Orchestrator - Manages Cursor Cloud Agents for integration updates.
 """
 
+import re
+import uuid
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
 from .cursor_client import CursorClient, AgentStatus, CursorClientError
 from models import Update, UpdateIntegration, Integration, UpdateIntegrationStatus
+
+
+def generate_branch_name(integration_name: str, prefix: str = "feat") -> str:
+    """
+    Generate a conventional branch name.
+    
+    Args:
+        integration_name: Name of the integration
+        prefix: Branch prefix (feat, fix, hotfix, bugfix, chore)
+    
+    Returns:
+        Branch name like "feat/my-integration-a1b2c3"
+    """
+    # Slugify: lowercase, replace spaces/special chars with hyphens
+    slug = re.sub(r'[^a-z0-9]+', '-', integration_name.lower()).strip('-')
+    short_id = uuid.uuid4().hex[:6]
+    return f"{prefix}/{slug}-{short_id}"
 
 
 PROMPT_TEMPLATE = """# Integration Update Task
@@ -78,7 +97,7 @@ class AgentOrchestrator:
         update_integration: UpdateIntegration,
         integration: Integration,
         auto_create_pr: bool = False
-    ) -> str:
+    ) -> tuple[str, str]:
         """
         Start a Cursor agent for a specific integration.
         
@@ -89,13 +108,16 @@ class AgentOrchestrator:
             auto_create_pr: Whether to auto-create PR when done
         
         Returns:
-            The Cursor agent ID
+            Tuple of (agent_id, branch_name)
         """
         if not integration.github_links:
             raise ValueError(f"Integration {integration.name} has no GitHub links")
         
         # Use the first GitHub link as the repository
         repo_url = integration.github_links[0]
+        
+        # Generate a branch name for this agent
+        branch_name = generate_branch_name(integration.name)
         
         # Build the prompt
         prompt = self.build_agent_prompt(
@@ -109,10 +131,11 @@ class AgentOrchestrator:
             agent_id = await client.launch_agent(
                 repository=repo_url,
                 prompt=prompt,
-                auto_create_pr=auto_create_pr
+                auto_create_pr=auto_create_pr,
+                branch_name=branch_name
             )
         
-        return agent_id
+        return agent_id, branch_name
     
     async def start_all_agents(
         self,
@@ -158,7 +181,7 @@ class AgentOrchestrator:
                 # Use per-integration setting if set, otherwise fall back to update-level setting
                 should_auto_pr = ui.auto_create_pr if ui.auto_create_pr is not None else (update.auto_create_pr or False)
                 
-                agent_id = await self.start_agent_for_integration(
+                agent_id, branch_name = await self.start_agent_for_integration(
                     update=update,
                     update_integration=ui,
                     integration=integration,
@@ -166,6 +189,7 @@ class AgentOrchestrator:
                 )
                 
                 ui.cursor_agent_id = agent_id
+                ui.cursor_branch_name = branch_name  # Store branch name immediately
                 ui.status = UpdateIntegrationStatus.IN_PROGRESS.value
                 agent_ids.append(agent_id)
                 
@@ -244,8 +268,8 @@ class AgentOrchestrator:
                 else:
                     ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
             elif agent_info.status == AgentStatus.STOPPED:
-                ui.status = UpdateIntegrationStatus.NEEDS_REVIEW.value
-                ui.agent_question = ui.agent_question or "Agent was stopped"
+                ui.status = UpdateIntegrationStatus.CANCELLED.value
+                ui.agent_question = ui.agent_question or "Agent stopped by user"
             elif agent_info.status == AgentStatus.FAILED:
                 ui.status = UpdateIntegrationStatus.NEEDS_REVIEW.value
                 ui.agent_question = f"Agent failed: {agent_info.summary or 'Unknown error'}"
@@ -379,7 +403,7 @@ class AgentOrchestrator:
             async with CursorClient(api_key) as client:
                 await client.stop_agent(ui.cursor_agent_id)
             
-            ui.status = UpdateIntegrationStatus.NEEDS_REVIEW.value
+            ui.status = UpdateIntegrationStatus.CANCELLED.value
             ui.agent_question = "Agent stopped by user"
             db.commit()
             

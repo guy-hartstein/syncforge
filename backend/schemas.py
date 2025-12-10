@@ -117,6 +117,7 @@ class UpdateIntegrationResponse(UpdateIntegrationBase):
     id: str
     update_id: str
     integration_name: Optional[str] = None  # Populated from join
+    github_url: Optional[str] = None  # First GitHub link for branch URL construction
     created_at: datetime
     updated_at: datetime
 

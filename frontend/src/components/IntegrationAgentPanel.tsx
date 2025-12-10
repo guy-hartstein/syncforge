@@ -34,6 +34,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', label: 'Ready to Merge' },
   skipped: { icon: StopCircle, color: 'text-text-muted', label: 'Skipped' },
   complete: { icon: CheckCircle, color: 'text-green-400', label: 'Complete' },
+  cancelled: { icon: StopCircle, color: 'text-red-400', label: 'Cancelled' },
 }
 
 export function IntegrationAgentPanel({
@@ -100,7 +101,7 @@ export function IntegrationAgentPanel({
       } catch (e) {
         console.error('Failed to poll conversation:', e)
       }
-    }, 5000)
+    }, 10000)  // Poll every 10s to avoid rate limiting
 
     return () => clearInterval(interval)
   }, [updateId, integration.integration_id, integration.status, integration.cursor_agent_id])
@@ -148,6 +149,13 @@ export function IntegrationAgentPanel({
   const statusColor = statusConfig[integration.status]?.color || 'text-text-muted'
   const statusLabel = statusConfig[integration.status]?.label || integration.status
 
+  // Construct GitHub branch URL from repo URL and branch name
+  const getBranchUrl = () => {
+    if (!integration.github_url || !integration.cursor_branch_name) return null
+    return `${integration.github_url}/tree/${integration.cursor_branch_name}`
+  }
+  const branchUrl = getBranchUrl()
+
   return (
     <motion.div
       initial={{ opacity: 0, height: 0 }}
@@ -180,8 +188,18 @@ export function IntegrationAgentPanel({
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors"
               >
+                View Agent
+              </a>
+            )}
+            {branchUrl && (
+              <a
+                href={branchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors"
+              >
                 <GitBranch size={12} />
-                {integration.cursor_branch_name || 'View Agent'}
+                {integration.cursor_branch_name}
               </a>
             )}
             {integration.pr_url && (
@@ -265,9 +283,9 @@ export function IntegrationAgentPanel({
                   <GitPullRequest size={14} />
                   View PR
                 </a>
-              ) : integration.cursor_agent_id ? (
+              ) : branchUrl ? (
                 <a
-                  href={`https://cursor.com/agents?selectedBcId=${integration.cursor_agent_id}`}
+                  href={branchUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-400 text-background text-sm font-medium hover:bg-green-500 transition-colors"

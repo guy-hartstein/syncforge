@@ -31,6 +31,7 @@ class UpdateIntegrationStatus(str, enum.Enum):
     READY_TO_MERGE = "ready_to_merge"
     SKIPPED = "skipped"
     COMPLETE = "complete"
+    CANCELLED = "cancelled"
 
 
 class Update(Base):

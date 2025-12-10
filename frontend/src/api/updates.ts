@@ -13,7 +13,8 @@ export interface UpdateIntegrationStatus {
   update_id: string
   integration_id: string
   integration_name?: string
-  status: 'pending' | 'in_progress' | 'needs_review' | 'ready_to_merge' | 'skipped' | 'complete'
+  github_url?: string  // GitHub repo URL for branch link
+  status: 'pending' | 'in_progress' | 'needs_review' | 'ready_to_merge' | 'skipped' | 'complete' | 'cancelled'
   pr_url?: string
   agent_question?: string
   custom_instructions: string
