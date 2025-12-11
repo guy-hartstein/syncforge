@@ -161,6 +161,7 @@ export function IntegrationAgentPanel({
         { id: `user-${Date.now()}`, type: 'user_message', text: message },
       ])
       setMessage('')
+      
       // Get current commit SHA before agent makes changes
       try {
         const status = await checkBranchStatus(updateId, integration.integration_id)

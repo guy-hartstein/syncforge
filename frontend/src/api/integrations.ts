@@ -33,4 +33,9 @@ export async function deleteIntegration(id: string): Promise<void> {
   if (!response.ok) throw new Error('Failed to delete integration')
 }
 
-
+export async function deleteMemory(integrationId: string, memoryId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/${integrationId}/memories/${memoryId}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error('Failed to delete memory')
+}

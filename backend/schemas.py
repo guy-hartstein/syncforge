@@ -19,8 +19,16 @@ class IntegrationUpdate(BaseModel):
     instructions: Optional[str] = None
 
 
+# Memory Schemas
+class Memory(BaseModel):
+    id: str
+    content: str
+    created_at: datetime
+
+
 class IntegrationResponse(IntegrationBase):
     id: str
+    memories: List[Memory] = []
     created_at: datetime
     updated_at: datetime
 

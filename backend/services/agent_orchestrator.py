@@ -29,7 +29,7 @@ def generate_branch_name(integration_name: str, prefix: str = "feat") -> str:
 
 
 PROMPT_TEMPLATE = """# Integration Update Task
-
+{user_memories_section}
 ## Implementation Guide
 {implementation_guide}
 
@@ -97,7 +97,19 @@ class AgentOrchestrator:
         """
         github_links_str = "\n".join([f"- {link}" for link in integration.github_links]) if integration.github_links else "No GitHub links provided"
         
+        # Build user memories section if any exist
+        user_memories_section = ""
+        if integration.memories:
+            memories_list = "\n".join([f"- {m.get('content', '')}" for m in integration.memories if m.get('content')])
+            if memories_list:
+                user_memories_section = f"""## User Preferences (IMPORTANT - Always Follow)
+The user has specified the following preferences for this integration. You MUST follow these:
+{memories_list}
+
+"""
+        
         return PROMPT_TEMPLATE.format(
+            user_memories_section=user_memories_section,
             implementation_guide=implementation_guide or "No implementation guide provided.",
             integration_name=integration.name,
             github_links=github_links_str,

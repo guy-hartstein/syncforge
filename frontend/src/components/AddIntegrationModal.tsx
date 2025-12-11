@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, useFieldArray } from 'react-hook-form'
-import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2, Search, Lock, Globe, Settings } from 'lucide-react'
-import type { Integration, IntegrationCreate } from '../types'
+import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2, Search, Lock, Globe, Settings, Brain } from 'lucide-react'
+import type { Integration, IntegrationCreate, Memory } from '../types'
 import { checkGitHubRepo, getGitHubStatus, listGitHubRepos, type GitHubRepo, type GitHubStatus } from '../api/github'
+import { deleteMemory } from '../api/integrations'
 import { useToast } from './Toast'
 
 interface AddIntegrationModalProps {
@@ -12,6 +13,7 @@ interface AddIntegrationModalProps {
   onSubmit: (data: IntegrationCreate) => void
   editingIntegration?: Integration | null
   onOpenSettings?: () => void
+  onMemoryDelete?: () => void
 }
 
 interface FormData {
@@ -28,7 +30,7 @@ interface LinkValidation {
   error?: string
 }
 
-export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegration, onOpenSettings }: AddIntegrationModalProps) {
+export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegration, onOpenSettings, onMemoryDelete }: AddIntegrationModalProps) {
   const [linkValidations, setLinkValidations] = useState<Record<number, LinkValidation>>({})
   const [showGitHubPrompt, setShowGitHubPrompt] = useState(false)
   const [showRepoSelector, setShowRepoSelector] = useState(false)
@@ -36,6 +38,8 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
   const [repos, setRepos] = useState<GitHubRepo[]>([])
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [repoSearch, setRepoSearch] = useState('')
+  const [memories, setMemories] = useState<Memory[]>([])
+  const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null)
   const toast = useToast()
 
   const {
@@ -180,15 +184,33 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
           : [{ value: '' }],
         instructions: editingIntegration.instructions,
       })
+      setMemories(editingIntegration.memories || [])
     } else {
       reset({
         name: '',
         github_links: [{ value: '' }],
         instructions: '',
       })
+      setMemories([])
     }
     setLinkValidations({})
   }, [editingIntegration, reset, isOpen])
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    if (!editingIntegration) return
+    
+    setDeletingMemoryId(memoryId)
+    try {
+      await deleteMemory(editingIntegration.id, memoryId)
+      setMemories(prev => prev.filter(m => m.id !== memoryId))
+      toast.success('Memory deleted')
+      onMemoryDelete?.()
+    } catch {
+      toast.error('Failed to delete memory')
+    } finally {
+      setDeletingMemoryId(null)
+    }
+  }
 
   const handleFormSubmit = (data: FormData) => {
     onSubmit({
@@ -413,6 +435,42 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                     className="textarea"
                   />
                 </div>
+
+                {/* Memories Section - only show when editing and has memories */}
+                {editingIntegration && memories.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2 flex items-center gap-1.5">
+                      <Brain size={14} />
+                      Memories
+                    </label>
+                    <div className="space-y-2">
+                      {memories.map((memory) => (
+                        <div
+                          key={memory.id}
+                          className="flex items-start gap-2 p-3 bg-surface-hover rounded-lg border border-border"
+                        >
+                          <p className="flex-1 text-sm text-text-secondary">{memory.content}</p>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMemory(memory.id)}
+                            disabled={deletingMemoryId === memory.id}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors disabled:opacity-50"
+                            title="Delete memory"
+                          >
+                            {deletingMemoryId === memory.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-text-muted">
+                      Memories are learned from your conversations with the update agent.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={onClose} className="btn-secondary flex-1">

@@ -63,3 +63,20 @@ def delete_integration(integration_id: str, db: Session = Depends(get_db)):
     return None
 
 
+@router.delete("/{integration_id}/memories/{memory_id}", status_code=204)
+def delete_memory(integration_id: str, memory_id: str, db: Session = Depends(get_db)):
+    """Delete a specific memory from an integration."""
+    integration = db.query(Integration).filter(Integration.id == integration_id).first()
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    
+    memories = integration.memories or []
+    original_count = len(memories)
+    memories = [m for m in memories if m.get("id") != memory_id]
+    
+    if len(memories) == original_count:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    
+    integration.memories = memories
+    db.commit()
+    return None

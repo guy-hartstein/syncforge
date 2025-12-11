@@ -2,11 +2,14 @@
 Agent API Endpoints - Manage Cursor Cloud Agents for integration updates.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime
+import uuid
+import logging
 
-from database import get_db
+from database import get_db, SessionLocal
 from models import Update, UpdateIntegration, Integration, UserSettings
 from schemas import (
     AgentConversationResponse,
@@ -16,6 +19,9 @@ from schemas import (
 )
 from services.cursor_client import CursorClient, CursorClientError
 from services.agent_orchestrator import AgentOrchestrator
+from agents.update_agent import get_update_agent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/updates", tags=["agents"])
 
@@ -121,15 +127,55 @@ async def get_conversation(
         )
 
 
+def extract_and_save_memory(integration_id: str, user_message: str, conversation_context: list):
+    """
+    Background task to extract and save memories from user messages.
+    Runs asynchronously to avoid adding latency to the followup response.
+    """
+    db = SessionLocal()
+    try:
+        agent = get_update_agent()
+        
+        # Build context from recent conversation
+        context = ""
+        if conversation_context:
+            recent_msgs = conversation_context[-4:]  # Last 4 messages for context
+            context = "\n".join([f"{m.get('type', 'unknown')}: {m.get('text', '')}" for m in recent_msgs])
+        
+        extracted_memory = agent.extract_memory(user_message, context)
+        
+        if extracted_memory:
+            integration = db.query(Integration).filter(Integration.id == integration_id).first()
+            if integration:
+                memory_id = str(uuid.uuid4())
+                memory_data = {
+                    "id": memory_id,
+                    "content": extracted_memory,
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                
+                memories = integration.memories or []
+                memories.append(memory_data)
+                integration.memories = memories
+                db.commit()
+                logger.info(f"Memory saved for integration {integration_id}: {extracted_memory[:50]}...")
+    except Exception as e:
+        logger.error(f"Failed to extract/save memory: {e}")
+    finally:
+        db.close()
+
+
 @router.post("/{update_id}/integrations/{integration_id}/followup")
 async def send_followup(
     update_id: str,
     integration_id: str,
     request: FollowupRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Send a follow-up message to an integration's agent.
+    Memory extraction runs in the background to avoid latency.
     """
     api_key = get_api_key(db)
     
@@ -150,6 +196,15 @@ async def send_followup(
     
     if not success:
         raise HTTPException(status_code=500, detail="Failed to send follow-up")
+    
+    # Fire off memory extraction as a background task (no latency impact)
+    conversation_context = ui.conversation or []
+    background_tasks.add_task(
+        extract_and_save_memory,
+        integration_id,
+        request.text,
+        conversation_context
+    )
     
     return {"success": True}
 

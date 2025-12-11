@@ -1,9 +1,15 @@
-from typing import Annotated, TypedDict, Literal
+from typing import Annotated, TypedDict, Literal, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 import os
+
+
+class MemoryExtraction(BaseModel):
+    """Structured output for memory extraction."""
+    memory: str = Field(default="", description="The extracted memory, or empty string if none")
 
 
 
@@ -13,6 +19,20 @@ class AgentState(TypedDict):
     clarification_count: int
     ready_to_proceed: bool
 
+
+IMPLEMENTATION_REQUIREMENTS = """
+## Code Quality Requirements (CRITICAL)
+- **PRESERVE EXISTING CODE STYLE**: Match the formatting patterns already present in each file. If parameters are defined inline, keep them inline. If the codebase uses single-line definitions, do not expand to multi-line JSON/dict formats.
+- **CONSISTENT FORMATTING**: Follow the existing indentation (spaces vs tabs, indent size), line length conventions, and bracket placement style of each repository.
+- **PRECISE INDENTATION**: Pay meticulous attention to indentation levels. Python is whitespace-sensitive - incorrect indentation causes runtime errors. Always match the exact indentation pattern of surrounding code.
+- **MINIMAL DIFF**: Make the smallest possible changes to achieve the goal. Avoid reformatting, reorganizing, or "improving" code that isn't directly related to the update.
+- **LINT-CLEAN**: Ensure changes pass standard linting (no trailing whitespace, consistent quotes, proper spacing around operators).
+
+## Security Requirements for Public Integrations
+- If any integration is marked as PUBLIC or external-facing, DO NOT expose internal implementation details such as: internal parameter names (e.g., use_cache, internal_timeout), internal endpoints, debug flags, internal IDs, or any configuration that reveals system architecture.
+- Public integrations should only expose the documented public API surface.
+- When in doubt, ask for clarification before exposing any parameter or detail.
+"""
 
 SYSTEM_PROMPT = """You are an assistant helping users update their software integrations. Your role is to:
 
@@ -30,6 +50,7 @@ IMPORTANT:
 - Do NOT ask which integrations are affected - the user selects that separately in the UI
 - If the user attaches a GitHub PR or other reference, review it carefully and use the information from the diff/content to understand the changes
 - When a PR is attached, acknowledge it and summarize the key changes you see in the diff
+- Ask if any of the selected integrations are PUBLIC (external-facing). Public integrations require extra care to avoid exposing internal implementation details (e.g., internal parameter names, debug flags, cache configs).
 
 When you feel you have enough information, end your message with: "I have enough information to proceed. Click 'Start Update' when you're ready."
 
@@ -182,7 +203,7 @@ This document contains the implementation details gathered from the update wizar
 
 ## Instructions
 Follow the changes described in the conversation above to update each integration.
-"""
+{IMPLEMENTATION_REQUIREMENTS}"""
         
         conversation_text = "\n".join([
             f"{msg['role'].upper()}: {msg['content']}" 
@@ -212,7 +233,60 @@ ATTACHMENTS:
         ]
         
         response = self.llm.invoke(messages)
-        return response.content
+        return response.content + IMPLEMENTATION_REQUIREMENTS
+
+    def extract_memory(self, user_message: str, context: str = "") -> Optional[str]:
+        """
+        Analyze a user message for actionable preferences worth remembering.
+        Uses structured output for reliable parsing.
+        Returns a formatted memory string if found, None otherwise.
+        """
+        if not self.llm:
+            # Simple heuristic fallback when no LLM
+            preference_phrases = [
+                "don't", "dont", "never", "always", "prefer", "should not",
+                "shouldn't", "make sure", "remember to", "keep", "avoid"
+            ]
+            msg_lower = user_message.lower()
+            if any(phrase in msg_lower for phrase in preference_phrases):
+                return f"User preference: {user_message}"
+            return None
+        
+        # Use structured output for reliable parsing
+        structured_llm = self.llm.with_structured_output(MemoryExtraction)
+        
+        messages = [
+            SystemMessage(content="""You analyze user messages for preferences or instructions that should be remembered for future updates to this integration.
+
+A memorable preference is:
+- A specific instruction about HOW to make changes (e.g., "don't edit the README", "always add tests")
+- A coding style preference (e.g., "use TypeScript", "prefer async/await")
+- A file or area to avoid or focus on
+- A general guideline for this integration
+
+NOT memorable:
+- General conversation or questions
+- One-time instructions specific to the current task
+- Acknowledgments like "ok", "thanks", "sounds good"
+
+If the message contains a memorable preference, set memory to a concise, reusable statement (1-2 sentences max).
+If there is no memorable preference, set memory to an empty string.
+
+Examples:
+- "don't edit the README" → memory: "Do not edit the README file when making updates"
+- "always make sure to run the tests" → memory: "Always run tests after making changes"
+- "ok that looks good" → memory: ""
+- "can you also add error handling?" → memory: "" (one-time request)
+- "I prefer using arrow functions" → memory: "Prefer arrow functions over regular function declarations"
+"""),
+            HumanMessage(content=f"""Context: {context}
+
+User message: {user_message}""")
+        ]
+        
+        result: MemoryExtraction = structured_llm.invoke(messages)
+        
+        return result.memory if result.memory else None
 
 
 # Singleton instance

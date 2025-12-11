@@ -239,6 +239,7 @@ export function OnboardingPage() {
                       integration={integration}
                       onEdit={handleOpenModal}
                       onDelete={handleDeleteIntegration}
+                      onMemoryDelete={() => queryClient.invalidateQueries({ queryKey: ['integrations'] })}
                       index={index}
                     />
                   ))}
@@ -254,6 +255,7 @@ export function OnboardingPage() {
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
         editingIntegration={editingIntegration}
+        onMemoryDelete={() => queryClient.invalidateQueries({ queryKey: ['integrations'] })}
       />
 
       <UpdateWizard

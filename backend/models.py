@@ -14,6 +14,7 @@ class Integration(Base):
     name = Column(String(255), nullable=False)
     github_links = Column(JSON, default=list)
     instructions = Column(Text, default="")
+    memories = Column(JSON, default=list)  # List of {id, content, created_at}
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
