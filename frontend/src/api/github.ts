@@ -118,3 +118,36 @@ export async function checkBranchStatus(
   }
   return response.json()
 }
+
+export interface GitHubPRDetails {
+  number: number
+  title: string
+  body: string | null
+  html_url: string
+  state: string
+  user_login: string
+  head_ref: string
+  base_ref: string
+  diff: string
+  additions: number
+  deletions: number
+  changed_files: number
+}
+
+export async function getPullRequestDetails(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<GitHubPRDetails> {
+  const response = await fetch(`${API_BASE}/repos/${owner}/${repo}/pulls/${prNumber}`)
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('GitHub not connected')
+    }
+    if (response.status === 404) {
+      throw new Error('Pull request not found')
+    }
+    throw new Error('Failed to fetch pull request details')
+  }
+  return response.json()
+}

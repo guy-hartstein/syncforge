@@ -68,6 +68,7 @@ const statusConfig: Record<UpdateIntegrationStatus['status'], {
 export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [selectedIntegrationId, setSelectedIntegrationId] = useState<string | null>(null)
   
   const integrationStatuses = update.integration_statuses || []
   const completedCount = integrationStatuses.filter(
@@ -192,7 +193,10 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
         )}
         {!isCreating && (
           <button
-            onClick={() => setIsDetailsOpen(true)}
+            onClick={() => {
+              setSelectedIntegrationId(null)
+              setIsDetailsOpen(true)
+            }}
             className="flex items-center gap-1 text-xs text-accent hover:text-accent/80 transition-colors py-1"
           >
             <ExternalLink size={14} />
@@ -215,9 +219,13 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
               {integrationStatuses.map((status) => {
                 const config = statusConfig[status.status]
                 return (
-                  <div
+                  <button
                     key={status.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-surface-hover/50"
+                    onClick={() => {
+                      setSelectedIntegrationId(status.integration_id)
+                      setIsDetailsOpen(true)
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-lg bg-surface-hover/50 hover:bg-surface-hover transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={`p-1 rounded ${config.bgColor}`}>
@@ -234,13 +242,14 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
                           href={status.pr_url}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           className="text-accent hover:text-accent-hover"
                         >
                           <GitPullRequest size={14} />
                         </a>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
               
@@ -262,7 +271,11 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
       <UpdateDetailsModal
         update={update}
         isOpen={isDetailsOpen}
-        onClose={() => setIsDetailsOpen(false)}
+        onClose={() => {
+          setIsDetailsOpen(false)
+          setSelectedIntegrationId(null)
+        }}
+        initialExpandedIntegration={selectedIntegrationId}
       />
     </motion.div>
   )

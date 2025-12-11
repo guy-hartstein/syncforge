@@ -4,15 +4,16 @@ import {
   X,
   Play,
   RefreshCw,
-  ChevronDown,
-  ChevronRight,
   GitBranch,
   GitPullRequest,
   AlertCircle,
   CheckCircle,
   Loader2,
   FileText,
+  ChevronRight,
   Clock,
+  Layers,
+  Share2,
 } from 'lucide-react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { startAgents, syncAgents } from '../api/agents'
@@ -25,19 +26,20 @@ interface UpdateDetailsModalProps {
   update: Update
   isOpen: boolean
   onClose: () => void
+  initialExpandedIntegration?: string | null
 }
 
-const statusConfig: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
-  pending: { icon: Clock, color: 'text-text-muted', bgColor: 'bg-surface-hover' },
-  in_progress: { icon: Loader2, color: 'text-blue-400', bgColor: 'bg-blue-400/10' },
-  needs_review: { icon: AlertCircle, color: 'text-amber-400', bgColor: 'bg-amber-400/10' },
-  ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', bgColor: 'bg-green-400/10' },
-  skipped: { icon: X, color: 'text-text-muted', bgColor: 'bg-surface-hover' },
-  complete: { icon: CheckCircle, color: 'text-green-400', bgColor: 'bg-green-400/10' },
+const statusConfig: Record<string, { icon: React.ElementType; color: string; bgColor: string; label: string }> = {
+  pending: { icon: Clock, color: 'text-text-muted', bgColor: 'bg-surface-hover', label: 'Pending' },
+  in_progress: { icon: Loader2, color: 'text-blue-400', bgColor: 'bg-blue-400/10', label: 'In Progress' },
+  needs_review: { icon: AlertCircle, color: 'text-amber-400', bgColor: 'bg-amber-400/10', label: 'Needs Review' },
+  ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Ready to Merge' },
+  skipped: { icon: X, color: 'text-text-muted', bgColor: 'bg-surface-hover', label: 'Skipped' },
+  complete: { icon: CheckCircle, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Complete' },
 }
 
-export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsModalProps) {
-  const [expandedIntegration, setExpandedIntegration] = useState<string | null>(null)
+export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedIntegration }: UpdateDetailsModalProps) {
+  const [selectedIntegration, setSelectedIntegration] = useState<string | null>(initialExpandedIntegration ?? null)
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -66,6 +68,18 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
     },
   })
 
+  // Set initial selection when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialExpandedIntegration) {
+        setSelectedIntegration(initialExpandedIntegration)
+      } else if (update.integration_statuses.length > 0 && !selectedIntegration) {
+        // Auto-select first integration if none selected
+        setSelectedIntegration(update.integration_statuses[0].integration_id)
+      }
+    }
+  }, [isOpen, initialExpandedIntegration, update.integration_statuses])
+
   // Auto-refresh when agents are running
   useEffect(() => {
     if (!isOpen) return
@@ -83,10 +97,6 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
     }
   }, [isOpen, update.integration_statuses])
 
-  const toggleIntegration = (integrationId: string) => {
-    setExpandedIntegration((prev) => (prev === integrationId ? null : integrationId))
-  }
-
   // Count statuses
   const statusCounts = update.integration_statuses.reduce(
     (acc, s) => {
@@ -101,6 +111,24 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
     update.status === 'in_progress' &&
     hasApiKey &&
     update.integration_statuses.some((s) => s.status === 'pending' && !s.cursor_agent_id)
+
+  const selectedIntegrationData = update.integration_statuses.find(
+    (s) => s.integration_id === selectedIntegration
+  )
+
+  const prUrls = update.integration_statuses
+    .map((s) => s.pr_url)
+    .filter((url): url is string => !!url)
+
+  const handleCopyPRLinks = async () => {
+    if (prUrls.length === 0) return
+    try {
+      await navigator.clipboard.writeText(prUrls.join('\n'))
+      toast.success(`Copied ${prUrls.length} PR link${prUrls.length !== 1 ? 's' : ''} to clipboard`)
+    } catch {
+      toast.error('Failed to copy to clipboard')
+    }
+  }
 
   return (
     <AnimatePresence>
@@ -119,7 +147,7 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="w-full max-w-5xl max-h-[85vh] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              className="w-full max-w-5xl h-[85vh] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -136,6 +164,15 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {prUrls.length > 0 && (
+                    <button
+                      onClick={handleCopyPRLinks}
+                      className="p-2 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                      title={`Copy ${prUrls.length} PR link${prUrls.length !== 1 ? 's' : ''}`}
+                    >
+                      <Share2 size={18} />
+                    </button>
+                  )}
                   {hasAgentsStarted && (
                     <button
                       onClick={() => syncMutation.mutate()}
@@ -157,7 +194,7 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
                 </div>
               </div>
 
-              {/* Status Summary */}
+              {/* Status Summary Bar */}
               <div className="px-6 py-3 border-b border-border bg-surface/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {Object.entries(statusCounts).map(([status, count]) => {
@@ -206,109 +243,151 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
                 )}
               </div>
 
-              {/* Integrations List */}
-              <div className="flex-1 overflow-y-auto">
-                {update.integration_statuses.map((integration) => {
-                  const config = statusConfig[integration.status] || statusConfig.pending
-                  const Icon = config.icon
-                  const isExpanded = expandedIntegration === integration.integration_id
+              {/* Main Content - Sidebar + Content */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Left Sidebar - Integration List */}
+                <div className="w-56 border-r border-border bg-surface/30 flex flex-col">
+                  <div className="p-3 border-b border-border">
+                    <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide">
+                      <Layers size={12} />
+                      Integrations
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-2">
+                    {update.integration_statuses.map((integration) => {
+                      const config = statusConfig[integration.status] || statusConfig.pending
+                      const Icon = config.icon
+                      const isSelected = selectedIntegration === integration.integration_id
 
-                  return (
-                    <div
-                      key={integration.id}
-                      className="border-b border-border last:border-b-0"
-                    >
-                      <button
-                        onClick={() => toggleIntegration(integration.integration_id)}
-                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-surface/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? (
-                            <ChevronDown size={16} className="text-text-muted" />
-                          ) : (
-                            <ChevronRight size={16} className="text-text-muted" />
-                          )}
-                          <span className="font-medium text-text-primary">
+                      return (
+                        <button
+                          key={integration.id}
+                          onClick={() => setSelectedIntegration(integration.integration_id)}
+                          className={`w-full px-3 py-2.5 flex items-center gap-2 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-accent/10 border-r-2 border-accent'
+                              : 'hover:bg-surface-hover'
+                          }`}
+                        >
+                          <Icon
+                            size={14}
+                            className={`flex-shrink-0 ${config.color} ${
+                              integration.status === 'in_progress' ? 'animate-spin' : ''
+                            }`}
+                          />
+                          <span
+                            className={`text-sm truncate ${
+                              isSelected ? 'text-text-primary font-medium' : 'text-text-secondary'
+                            }`}
+                          >
                             {integration.integration_name || 'Unknown'}
                           </span>
                           {integration.agent_question && (
-                            <AlertCircle size={14} className="text-amber-400" />
+                            <AlertCircle size={12} className="text-amber-400 flex-shrink-0 ml-auto" />
                           )}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Implementation Guide in Sidebar Footer */}
+                  {update.implementation_guide && (
+                    <div className="p-3 border-t border-border">
+                      <details className="group">
+                        <summary className="flex items-center gap-2 cursor-pointer text-xs text-text-muted hover:text-text-secondary transition-colors">
+                          <FileText size={12} />
+                          <span>Implementation Guide</span>
+                          <ChevronRight
+                            size={12}
+                            className="ml-auto group-open:rotate-90 transition-transform"
+                          />
+                        </summary>
+                        <div className="mt-2 p-2 bg-background rounded-lg border border-border max-h-32 overflow-y-auto">
+                          <pre className="text-[10px] text-text-muted whitespace-pre-wrap font-mono leading-relaxed">
+                            {update.implementation_guide}
+                          </pre>
                         </div>
-                        <div className="flex items-center gap-3">
-                          {integration.pr_url && (
-                            <a
-                              href={integration.pr_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
-                            >
-                              <GitPullRequest size={12} />
-                              PR
-                            </a>
-                          )}
-                          {integration.cursor_agent_id && !integration.pr_url && (
-                            <a
-                              href={`https://cursor.com/agents?selectedBcId=${integration.cursor_agent_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 text-xs text-text-muted hover:text-accent transition-colors"
-                            >
-                              <GitBranch size={12} />
-                              {integration.cursor_branch_name || 'View Agent'}
-                            </a>
-                          )}
-                          <div
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg ${config.bgColor}`}
-                          >
-                            <Icon
-                              size={12}
-                              className={`${config.color} ${
-                                integration.status === 'in_progress' ? 'animate-spin' : ''
-                              }`}
-                            />
-                            <span className={`text-xs font-medium ${config.color}`}>
-                              {integration.status.replace('_', ' ')}
-                            </span>
+                      </details>
+                    </div>
+                  )}
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {selectedIntegrationData ? (
+                    <>
+                      {/* Integration Header */}
+                      <div className="px-6 py-4 border-b border-border bg-surface/30">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-text-primary">
+                              {selectedIntegrationData.integration_name || 'Unknown'}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              {(() => {
+                                const config = statusConfig[selectedIntegrationData.status] || statusConfig.pending
+                                const Icon = config.icon
+                                return (
+                                  <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded ${config.bgColor}`}>
+                                    <Icon
+                                      size={12}
+                                      className={`${config.color} ${
+                                        selectedIntegrationData.status === 'in_progress' ? 'animate-spin' : ''
+                                      }`}
+                                    />
+                                    <span className={`text-xs font-medium ${config.color}`}>
+                                      {config.label}
+                                    </span>
+                                  </div>
+                                )
+                              })()}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {selectedIntegrationData.pr_url && (
+                              <a
+                                href={selectedIntegrationData.pr_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                              >
+                                <GitPullRequest size={14} />
+                                View PR
+                              </a>
+                            )}
+                            {selectedIntegrationData.cursor_agent_id && !selectedIntegrationData.pr_url && (
+                              <a
+                                href={`https://cursor.com/agents?selectedBcId=${selectedIntegrationData.cursor_agent_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
+                              >
+                                <GitBranch size={14} />
+                                {selectedIntegrationData.cursor_branch_name || 'View Agent'}
+                              </a>
+                            )}
                           </div>
                         </div>
-                      </button>
+                      </div>
 
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <IntegrationAgentPanel
-                            updateId={update.id}
-                            integration={integration}
-                          />
-                        )}
-                      </AnimatePresence>
+                      {/* Integration Agent Panel */}
+                      <div className="flex-1 overflow-y-auto">
+                        <IntegrationAgentPanel
+                          updateId={update.id}
+                          integration={selectedIntegrationData}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-text-muted">
+                      <div className="text-center">
+                        <Layers size={48} className="mx-auto mb-4 opacity-30" />
+                        <p>Select an integration to view details</p>
+                      </div>
                     </div>
-                  )
-                })}
-              </div>
-
-              {/* Footer with Implementation Guide */}
-              {update.implementation_guide && (
-                <div className="px-6 py-3 border-t border-border bg-surface">
-                  <details className="group">
-                    <summary className="flex items-center gap-2 cursor-pointer text-sm text-text-secondary hover:text-text-primary transition-colors">
-                      <FileText size={14} />
-                      <span>View Implementation Guide</span>
-                      <ChevronRight
-                        size={14}
-                        className="group-open:rotate-90 transition-transform"
-                      />
-                    </summary>
-                    <div className="mt-3 p-3 bg-background rounded-lg border border-border max-h-48 overflow-y-auto">
-                      <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono">
-                        {update.implementation_guide}
-                      </pre>
-                    </div>
-                  </details>
+                  )}
                 </div>
-              )}
+              </div>
             </motion.div>
           </div>
         </>
@@ -316,4 +395,3 @@ export function UpdateDetailsModal({ update, isOpen, onClose }: UpdateDetailsMod
     </AnimatePresence>
   )
 }
-

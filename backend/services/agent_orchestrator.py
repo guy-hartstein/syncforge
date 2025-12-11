@@ -273,11 +273,27 @@ The user has specified the following preferences for this integration. You MUST 
             if agent_info.pr_url:
                 ui.pr_url = agent_info.pr_url
             
-            # Store conversation
-            ui.conversation = [
+            # Store conversation - merge to preserve locally stored user messages
+            # that Cursor API might not have returned yet
+            cursor_messages = [
                 {"id": msg.id, "type": msg.type, "text": msg.text}
                 for msg in conversation
             ]
+            
+            # Get existing local user messages (ones we stored, with "user-" prefix IDs)
+            existing_conversation = ui.conversation or []
+            local_user_messages = [
+                m for m in existing_conversation 
+                if m.get("type") == "user_message" and m.get("id", "").startswith("user-")
+            ]
+            
+            # Check which local user messages aren't in Cursor's response
+            cursor_msg_texts = {m["text"] for m in cursor_messages if m.get("type") == "user_message"}
+            missing_user_msgs = [m for m in local_user_messages if m["text"] not in cursor_msg_texts]
+            
+            # Use Cursor's conversation but append any missing user messages at the end
+            # (they should appear after the last message Cursor knows about)
+            ui.conversation = cursor_messages + missing_user_msgs
             
             # Check for questions in conversation (last assistant message ends with ?)
             has_pending_question = False
@@ -400,6 +416,15 @@ The user has specified the following preferences for this integration. You MUST 
         try:
             async with CursorClient(api_key) as client:
                 await client.send_followup(ui.cursor_agent_id, text)
+            
+            # Store the user message in conversation
+            conversation = ui.conversation or []
+            conversation.append({
+                "id": f"user-{uuid.uuid4().hex[:8]}",
+                "type": "user_message",
+                "text": text
+            })
+            ui.conversation = conversation
             
             # Clear the question and set back to in progress
             ui.agent_question = None

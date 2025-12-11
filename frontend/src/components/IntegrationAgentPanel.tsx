@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import {
   MessageSquare,
   Send,
@@ -14,13 +13,15 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Plus,
+  Minus,
 } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { sendFollowup, stopAgent, getConversation, updateIntegrationSettings } from '../api/agents'
-import { checkBranchStatus } from '../api/github'
+import { sendFollowup, stopAgent, updateIntegrationSettings } from '../api/agents'
+import { checkBranchStatus, getPullRequestDetails, type GitHubPRDetails } from '../api/github'
 import type { UpdateIntegrationStatus, ConversationMessage } from '../api/updates'
 
 interface IntegrationAgentPanelProps {
@@ -38,6 +39,13 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   cancelled: { icon: StopCircle, color: 'text-red-400', label: 'Cancelled' },
 }
 
+// Parse PR URL to extract owner, repo, and PR number
+function parsePrUrl(prUrl: string): { owner: string; repo: string; prNumber: number } | null {
+  const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+  if (!match) return null
+  return { owner: match[1], repo: match[2], prNumber: parseInt(match[3], 10) }
+}
+
 export function IntegrationAgentPanel({
   updateId,
   integration,
@@ -48,6 +56,9 @@ export function IntegrationAgentPanel({
   const [branchCreated, setBranchCreated] = useState(false)
   const [lastCommitSha, setLastCommitSha] = useState<string | null>(null)
   const [waitingForUpdate, setWaitingForUpdate] = useState(false)
+  const [showDiff, setShowDiff] = useState(false)
+  const [prDetails, setPrDetails] = useState<GitHubPRDetails | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(messages.length)
   const queryClient = useQueryClient()
@@ -69,30 +80,18 @@ export function IntegrationAgentPanel({
   }, [messages])
 
   // Sync local state when parent data changes (e.g., after sync)
+  // The parent component syncs with the backend every 10s which already fetches conversation
+  // Backend now preserves locally-stored user messages, so we can trust server state
   useEffect(() => {
     if (integration.conversation && integration.conversation.length > 0) {
+      // If we're waiting for an update and new messages arrived, clear the waiting state
+      if (waitingForUpdate && integration.conversation.length > messages.length) {
+        setWaitingForUpdate(false)
+        setLastCommitSha(null)
+      }
       setMessages(integration.conversation)
     }
   }, [integration.conversation])
-
-  // Fetch conversation on initial mount if agent exists
-  useEffect(() => {
-    if (!integration.cursor_agent_id) return
-    
-    // Initial fetch
-    const fetchConversation = async () => {
-      try {
-        const conv = await getConversation(updateId, integration.integration_id)
-        if (conv.messages.length > 0) {
-          setMessages(conv.messages)
-        }
-      } catch (e) {
-        console.error('Failed to fetch conversation:', e)
-      }
-    }
-    
-    fetchConversation()
-  }, [updateId, integration.integration_id, integration.cursor_agent_id])
 
   // Poll GitHub for branch creation (before branch exists)
   useEffect(() => {
@@ -113,22 +112,6 @@ export function IntegrationAgentPanel({
     return () => clearInterval(interval)
   }, [updateId, integration.integration_id, integration.status, integration.cursor_branch_name, branchCreated, queryClient])
 
-  // Fetch conversation once after branch is created
-  useEffect(() => {
-    if (!integration.cursor_agent_id || !branchCreated) return
-
-    const fetchConversation = async () => {
-      try {
-        const conv = await getConversation(updateId, integration.integration_id)
-        setMessages(conv.messages)
-      } catch (e) {
-        console.error('Failed to fetch conversation:', e)
-      }
-    }
-
-    fetchConversation()
-  }, [updateId, integration.integration_id, integration.cursor_agent_id, branchCreated])
-
   // Poll for branch updates after sending a follow-up
   useEffect(() => {
     if (!waitingForUpdate || !lastCommitSha) return
@@ -140,9 +123,7 @@ export function IntegrationAgentPanel({
           // New commit detected - agent has pushed changes
           setWaitingForUpdate(false)
           setLastCommitSha(null)
-          // Fetch updated conversation
-          const conv = await getConversation(updateId, integration.integration_id)
-          setMessages(conv.messages)
+          // Invalidate queries to trigger a sync which will fetch the updated conversation
           queryClient.invalidateQueries({ queryKey: ['updates'] })
         }
       } catch (e) {
@@ -152,6 +133,25 @@ export function IntegrationAgentPanel({
 
     return () => clearInterval(interval)
   }, [updateId, integration.integration_id, waitingForUpdate, lastCommitSha, queryClient])
+
+  // Fetch PR details when diff is toggled on
+  useEffect(() => {
+    if (!showDiff || !integration.pr_url || prDetails) return
+
+    const parsed = parsePrUrl(integration.pr_url)
+    if (!parsed) return
+
+    setDiffLoading(true)
+    getPullRequestDetails(parsed.owner, parsed.repo, parsed.prNumber)
+      .then(setPrDetails)
+      .catch(console.error)
+      .finally(() => setDiffLoading(false))
+  }, [showDiff, integration.pr_url, prDetails])
+
+  // Reset PR details when PR URL changes
+  useEffect(() => {
+    setPrDetails(null)
+  }, [integration.pr_url])
 
   const followupMutation = useMutation({
     mutationFn: (text: string) => sendFollowup(updateId, integration.integration_id, text),
@@ -215,13 +215,7 @@ export function IntegrationAgentPanel({
   const branchUrl = getBranchUrl()
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      exit={{ opacity: 0, height: 0 }}
-      className="border-t border-border"
-    >
-      <div className="p-6">
+    <div className="p-6">
         {/* Header with status */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -261,15 +255,24 @@ export function IntegrationAgentPanel({
               </a>
             )}
             {integration.pr_url && (
-              <a
-                href={integration.pr_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
-              >
-                <GitPullRequest size={12} />
-                View PR
-              </a>
+              <>
+                <a
+                  href={integration.pr_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                >
+                  <GitPullRequest size={12} />
+                  View PR
+                </a>
+                <button
+                  onClick={() => setShowDiff(!showDiff)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-surface-hover text-text-secondary hover:bg-surface hover:text-text-primary transition-colors"
+                >
+                  {showDiff ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  Diff
+                </button>
+              </>
             )}
             {integration.status === 'in_progress' && integration.cursor_agent_id && (
               <button
@@ -283,6 +286,61 @@ export function IntegrationAgentPanel({
             )}
           </div>
         </div>
+
+        {/* PR Diff Viewer */}
+        {showDiff && integration.pr_url && (
+          <div className="mb-6 bg-surface rounded-xl border border-border overflow-hidden">
+            <div className="p-3 border-b border-border flex items-center justify-between">
+              <span className="text-sm font-medium text-text-secondary">Pull Request Diff</span>
+              {prDetails && (
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1 text-green-400">
+                    <Plus size={12} />
+                    {prDetails.additions}
+                  </span>
+                  <span className="flex items-center gap-1 text-red-400">
+                    <Minus size={12} />
+                    {prDetails.deletions}
+                  </span>
+                  <span className="text-text-muted">
+                    {prDetails.changed_files} file{prDetails.changed_files !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="max-h-96 overflow-auto">
+              {diffLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={20} className="animate-spin text-text-muted" />
+                </div>
+              ) : prDetails?.diff ? (
+                <pre className="p-4 text-xs font-mono leading-relaxed overflow-x-auto">
+                  {prDetails.diff.split('\n').map((line, i) => {
+                    let className = 'text-text-secondary'
+                    if (line.startsWith('+') && !line.startsWith('+++')) {
+                      className = 'text-green-400 bg-green-400/10'
+                    } else if (line.startsWith('-') && !line.startsWith('---')) {
+                      className = 'text-red-400 bg-red-400/10'
+                    } else if (line.startsWith('@@')) {
+                      className = 'text-blue-400 bg-blue-400/10'
+                    } else if (line.startsWith('diff --git') || line.startsWith('index ')) {
+                      className = 'text-text-muted'
+                    }
+                    return (
+                      <div key={i} className={`${className} px-2 -mx-2`}>
+                        {line || ' '}
+                      </div>
+                    )
+                  })}
+                </pre>
+              ) : (
+                <p className="text-sm text-text-muted text-center py-4">
+                  Failed to load diff
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Auto Create PR Toggle - only show if agent not started yet */}
         {integration.status === 'pending' && (
@@ -563,8 +621,7 @@ export function IntegrationAgentPanel({
               </div>
             )}
         </div>
-      </div>
-    </motion.div>
+    </div>
   )
 }
 
