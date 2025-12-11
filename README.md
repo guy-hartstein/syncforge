@@ -1,6 +1,6 @@
 # SyncForge
 
-A tool for managing software integrations and automating synchronized updates across multiple GitHub repositories using cloud coding agents (powered by Cursor Cloud Agents). SyncForge remembers implementation techniques for each integration and becomes better at managing your rollouts over time. It integrates with GitHub, Linear, and Cursor to fit into your existing stack. 
+An open-source platform for managing software integrations and automating synchronized updates across multiple GitHub repositories using cloud coding agents (powered by Cursor Cloud Agents). SyncForge remembers implementation techniques for each integration and becomes better at managing your rollouts over time. It integrates with GitHub, Linear, and Cursor to fit into your existing stack. 
 
 ---
 
