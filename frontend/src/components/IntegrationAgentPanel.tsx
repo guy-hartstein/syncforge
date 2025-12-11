@@ -218,19 +218,12 @@ export function IntegrationAgentPanel({
     <div className="p-6">
         {/* Header with status */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 ${statusColor}`}>
-              <StatusIcon
-                size={16}
-                className={integration.status === 'in_progress' ? 'animate-spin' : ''}
-              />
-              <span className="text-sm font-medium">{statusLabel}</span>
-            </div>
-            {integration.cursor_agent_id && (
-              <span className="text-xs text-text-muted font-mono">
-                {integration.cursor_agent_id}
-              </span>
-            )}
+          <div className={`flex items-center gap-2 ${statusColor}`}>
+            <StatusIcon
+              size={16}
+              className={integration.status === 'in_progress' ? 'animate-spin' : ''}
+            />
+            <span className="text-sm font-medium">{statusLabel}</span>
           </div>
           <div className="flex items-center gap-2">
             {integration.cursor_agent_id && (
@@ -238,9 +231,10 @@ export function IntegrationAgentPanel({
                 href={`https://cursor.com/agents?selectedBcId=${integration.cursor_agent_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors"
+                className="opacity-70 hover:opacity-100 transition-opacity"
+                title="View in Cursor"
               >
-                View Agent
+                <img src="/cursor.png" alt="Cursor" className="w-4 h-4" />
               </a>
             )}
             {branchUrl && (
@@ -375,41 +369,6 @@ export function IntegrationAgentPanel({
                 <p className="text-sm font-medium text-amber-400 mb-1">Agent Question</p>
                 <p className="text-sm text-text-secondary">{integration.agent_question}</p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Ready to Merge Actions - hide if there's a pending question */}
-        {integration.status === 'ready_to_merge' && !integration.agent_question && (
-          <div className="mb-6 p-4 rounded-xl bg-green-400/10 border border-green-400/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span className="text-sm font-medium text-green-400">
-                  {integration.pr_url ? 'Pull Request Ready' : 'Branch Ready'}
-                </span>
-              </div>
-              {integration.pr_url ? (
-                <a
-                  href={integration.pr_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-400 text-background text-sm font-medium hover:bg-green-500 transition-colors"
-                >
-                  <GitPullRequest size={14} />
-                  View PR
-                </a>
-              ) : branchUrl ? (
-                <a
-                  href={branchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-400 text-background text-sm font-medium hover:bg-green-500 transition-colors"
-                >
-                  <GitBranch size={14} />
-                  View Branch
-                </a>
-              ) : null}
             </div>
           </div>
         )}
