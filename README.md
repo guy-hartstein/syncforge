@@ -102,7 +102,7 @@ Once the AI indicates it's ready (the "Start Update" button becomes enabled), cl
 
 After creating an update, SyncForge launches Cursor Cloud Agents to implement changes across your integrations. The dashboard provides real-time monitoring.
 
-<img width="1150" height="786" alt="image" src="https://github.com/user-attachments/assets/cf607cf5-8162-4611-bf40-59f7dd8fae06" />
+<img width="514" height="627" alt="image" src="https://github.com/user-attachments/assets/b7f86d04-a3f1-486d-ae83-b475ff09680a" />
 
 **Update card:**
 
@@ -131,7 +131,7 @@ Click an integration to expand its agent panel:
 - **Branch link**: Direct link to the working branch on GitHub
 - **PR link**: Link to the created pull request (if auto-create is enabled)
 
-<img width="756" height="878" alt="Screenshot 2025-12-10 at 4 15 27 PM" src="https://github.com/user-attachments/assets/3fefc4ca-7ae6-422a-8b10-671ed2a15cde" />
+<img width="1150" height="786" alt="image" src="https://github.com/user-attachments/assets/cf607cf5-8162-4611-bf40-59f7dd8fae06" />
 
 **Interacting with agents:**
 
