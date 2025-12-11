@@ -4,12 +4,25 @@ A tool for managing software integrations and automating synchronized updates ac
 
 ---
 
+## Who is SyncForge for?
+
+SyncForge is built for teams and developers who maintain **multiple codebases that need to stay in sync**:
+
+- **SDK maintainers** shipping libraries across multiple languages (JavaScript, Python, Go, etc.)
+- **Platform teams** managing client integrations that must reflect API changes
+- **Open source maintainers** coordinating updates across forks or related projects
+- **Ecosystem managers** distributing changes to a network of platform partners (LangChain, n8n, etc.)
+
+If you've ever spent hours copy-pasting the same change across repositories—or worse, forgotten one, SyncForge automates that process with cloud agents that understand your codebase conventions.
+
+---
+
 ## Part 1: What is SyncForge?
 
 SyncForge helps teams maintain consistency across multiple codebases by:
 
 - Managing integrations linked to GitHub repositories
-- Using an AI-powered wizard to understand update requirements
+- Using an update wizard to understand update requirements
 - Orchestrating Cursor Cloud Agents to implement changes automatically
 - Creating pull requests across all affected repositories
 
