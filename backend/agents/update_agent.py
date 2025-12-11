@@ -23,9 +23,10 @@ class AgentState(TypedDict):
 IMPLEMENTATION_REQUIREMENTS = """
 ## Code Quality Requirements (CRITICAL)
 - **PRESERVE EXISTING CODE STYLE**: Match the formatting patterns already present in each file. If parameters are defined inline, keep them inline. If the codebase uses single-line definitions, do not expand to multi-line JSON/dict formats.
+- **FOCUS ON THE TASK AT HAND**: Only make changes that are directly related to the task at hand. Do not reformat, reorganize, or "improve" code that isn't directly related to the update. 
 - **CONSISTENT FORMATTING**: Follow the existing indentation (spaces vs tabs, indent size), line length conventions, and bracket placement style of each repository.
 - **PRECISE INDENTATION**: Pay meticulous attention to indentation levels. Python is whitespace-sensitive - incorrect indentation causes runtime errors. Always match the exact indentation pattern of surrounding code.
-- **MINIMAL DIFF**: Make the smallest possible changes to achieve the goal. Avoid reformatting, reorganizing, or "improving" code that isn't directly related to the update.
+- **MINIMAL DIFF**: Make the smallest possible changes to achieve the goal. Avoid reformatting, reorganizing, or "improving" code that isn't directly related to the update. Never add new tests or documentation unless explicitly requested.
 - **LINT-CLEAN**: Ensure changes pass standard linting (no trailing whitespace, consistent quotes, proper spacing around operators).
 
 ## Security Requirements for Public Integrations
