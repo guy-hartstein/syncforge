@@ -2,13 +2,12 @@
 User Settings API Endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import UserSettings
 from schemas import (
-    UserSettingsCreate,
     UserSettingsUpdate,
     UserSettingsResponse,
     TestConnectionResponse
@@ -38,6 +37,7 @@ def get_settings(db: Session = Depends(get_db)):
         has_cursor_api_key=bool(settings.cursor_api_key),
         github_connected=bool(settings.github_pat),
         github_username=settings.github_username,
+        preferred_model=settings.preferred_model,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )
@@ -55,6 +55,9 @@ def update_settings(
         # Store the API key (in production, encrypt this)
         settings.cursor_api_key = settings_update.cursor_api_key
     
+    if settings_update.preferred_model is not None:
+        settings.preferred_model = settings_update.preferred_model
+    
     db.commit()
     db.refresh(settings)
     
@@ -63,6 +66,7 @@ def update_settings(
         has_cursor_api_key=bool(settings.cursor_api_key),
         github_connected=bool(settings.github_pat),
         github_username=settings.github_username,
+        preferred_model=settings.preferred_model,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )
@@ -110,4 +114,20 @@ def delete_cursor_api_key(db: Session = Depends(get_db)):
         db.commit()
     
     return {"success": True}
+
+
+@router.get("/models")
+async def list_models(db: Session = Depends(get_db)):
+    """Get list of available models from Cursor API."""
+    settings = db.query(UserSettings).first()
+    
+    if not settings or not settings.cursor_api_key:
+        return {"models": [], "error": "No Cursor API key configured"}
+    
+    try:
+        async with CursorClient(settings.cursor_api_key) as client:
+            models = await client.list_models()
+        return {"models": models}
+    except CursorClientError as e:
+        return {"models": [], "error": str(e)}
 

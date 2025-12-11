@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from database import Base, engine
 import models  # noqa: F401 - Import models to register them with Base before create_all
@@ -16,6 +17,20 @@ load_dotenv()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+
+def run_migrations():
+    """Run any necessary schema migrations."""
+    with engine.connect() as conn:
+        # Add preferred_model column to user_settings if it doesn't exist
+        result = conn.execute(text("PRAGMA table_info(user_settings)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "preferred_model" not in columns:
+            conn.execute(text("ALTER TABLE user_settings ADD COLUMN preferred_model VARCHAR(100)"))
+            conn.commit()
+
+
+run_migrations()
 
 app = FastAPI(
     title="SyncForge API",

@@ -123,7 +123,8 @@ The user has specified the following preferences for this integration. You MUST 
         update: Update,
         update_integration: UpdateIntegration,
         integration: Integration,
-        auto_create_pr: bool = False
+        auto_create_pr: bool = False,
+        model: Optional[str] = None
     ) -> tuple[str, str]:
         """
         Start a Cursor agent for a specific integration.
@@ -133,6 +134,7 @@ The user has specified the following preferences for this integration. You MUST 
             update_integration: The update-integration record
             integration: The integration to update
             auto_create_pr: Whether to auto-create PR when done
+            model: Optional model to use for the agent
         
         Returns:
             Tuple of (agent_id, branch_name)
@@ -160,7 +162,8 @@ The user has specified the following preferences for this integration. You MUST 
                 repository=repo_url,
                 prompt=prompt,
                 auto_create_pr=auto_create_pr,
-                branch_name=branch_name
+                branch_name=branch_name,
+                model=model
             )
         
         return agent_id, branch_name
@@ -169,7 +172,8 @@ The user has specified the following preferences for this integration. You MUST 
         self,
         update_id: str,
         api_key: str,
-        db: Session
+        db: Session,
+        model: Optional[str] = None
     ) -> List[str]:
         """
         Start agents for all integrations in an update.
@@ -178,6 +182,7 @@ The user has specified the following preferences for this integration. You MUST 
             update_id: The update ID
             api_key: Cursor API key
             db: Database session
+            model: Optional model to use for agents
         
         Returns:
             List of launched agent IDs
@@ -213,7 +218,8 @@ The user has specified the following preferences for this integration. You MUST 
                     update=update,
                     update_integration=ui,
                     integration=integration,
-                    auto_create_pr=should_auto_pr
+                    auto_create_pr=should_auto_pr,
+                    model=model
                 )
                 
                 ui.cursor_agent_id = agent_id

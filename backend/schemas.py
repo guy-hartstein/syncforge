@@ -212,6 +212,7 @@ class StartAgentsResponse(BaseModel):
 # User Settings Schemas
 class UserSettingsBase(BaseModel):
     cursor_api_key: Optional[str] = None
+    preferred_model: Optional[str] = None
 
 
 class UserSettingsCreate(UserSettingsBase):
@@ -227,6 +228,7 @@ class UserSettingsResponse(BaseModel):
     has_cursor_api_key: bool  # Don't expose actual key
     github_connected: bool = False  # Whether GitHub PAT is configured
     github_username: Optional[str] = None  # GitHub username if connected
+    preferred_model: Optional[str] = None  # Preferred model for agents
     created_at: datetime
     updated_at: datetime
 

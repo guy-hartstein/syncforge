@@ -37,12 +37,19 @@ def get_api_key(db: Session) -> str:
     return settings.cursor_api_key
 
 
+def get_preferred_model(db: Session) -> Optional[str]:
+    """Get preferred model from user settings."""
+    settings = db.query(UserSettings).first()
+    return settings.preferred_model if settings else None
+
+
 @router.post("/{update_id}/start-agents", response_model=StartAgentsResponse)
 async def start_agents(update_id: str, db: Session = Depends(get_db)):
     """
     Start Cursor agents for all integrations in an update.
     """
     api_key = get_api_key(db)
+    preferred_model = get_preferred_model(db)
     
     update = db.query(Update).filter(Update.id == update_id).first()
     if not update:
@@ -51,7 +58,7 @@ async def start_agents(update_id: str, db: Session = Depends(get_db)):
     orchestrator = AgentOrchestrator(api_key)
     
     try:
-        agent_ids = await orchestrator.start_all_agents(update_id, api_key, db)
+        agent_ids = await orchestrator.start_all_agents(update_id, api_key, db, model=preferred_model)
         return StartAgentsResponse(
             started=len(agent_ids),
             agent_ids=agent_ids

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Key, Check, AlertCircle, Loader2, Trash2, Github } from 'lucide-react'
+import { X, Key, Check, AlertCircle, Loader2, Trash2, Github, ChevronDown } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchSettings, updateSettings, testConnection, deleteCursorApiKey } from '../api/settings'
+import { fetchSettings, updateSettings, testConnection, deleteCursorApiKey, fetchModels } from '../api/settings'
 import { saveGitHubToken, deleteGitHubToken } from '../api/github'
 import { useConfirm } from './ConfirmDialog'
 
@@ -16,6 +16,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [githubToken, setGithubToken] = useState('')
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [githubResult, setGithubResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [modelResult, setModelResult] = useState<{ success: boolean; message: string } | null>(null)
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
@@ -25,15 +26,33 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     enabled: isOpen,
   })
 
+  const { data: modelsData, isLoading: modelsLoading } = useQuery({
+    queryKey: ['models'],
+    queryFn: fetchModels,
+    enabled: isOpen && !!settings?.has_cursor_api_key,
+  })
+
   const saveMutation = useMutation({
     mutationFn: updateSettings,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
+      queryClient.invalidateQueries({ queryKey: ['models'] })
       setApiKey('')
       setTestResult({ success: true, message: 'API key saved successfully' })
     },
     onError: () => {
       setTestResult({ success: false, message: 'Failed to save API key' })
+    },
+  })
+
+  const saveModelMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      setModelResult({ success: true, message: 'Model preference saved' })
+    },
+    onError: () => {
+      setModelResult({ success: false, message: 'Failed to save model preference' })
     },
   })
 
@@ -82,13 +101,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setGithubToken('')
       setTestResult(null)
       setGithubResult(null)
+      setModelResult(null)
     }
   }, [isOpen])
 
   const handleSave = () => {
     if (apiKey.trim()) {
-      saveMutation.mutate(apiKey.trim())
+      saveMutation.mutate({ cursor_api_key: apiKey.trim() })
     }
+  }
+
+  const handleModelChange = (model: string) => {
+    saveModelMutation.mutate({ preferred_model: model })
   }
 
   const handleTest = () => {
@@ -251,6 +275,75 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </motion.div>
                   )}
                 </div>
+
+                {/* Model Selection Section - Only show when API key is configured */}
+                {settings?.has_cursor_api_key && (
+                  <>
+                    <div className="border-t border-border" />
+                    <div>
+                      <label className="block text-sm font-medium text-text-primary mb-2">
+                        Preferred Model
+                      </label>
+                      <p className="text-xs text-text-muted mb-3">
+                        Select the model to use for cloud agents
+                      </p>
+
+                      {modelsLoading ? (
+                        <div className="flex items-center gap-2 p-3 bg-surface rounded-lg border border-border">
+                          <Loader2 size={16} className="animate-spin text-text-muted" />
+                          <span className="text-sm text-text-muted">Loading models...</span>
+                        </div>
+                      ) : modelsData?.error ? (
+                        <div className="p-3 bg-red-400/10 rounded-lg border border-red-400/20">
+                          <span className="text-sm text-red-400">{modelsData.error}</span>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            value={settings?.preferred_model || ''}
+                            onChange={(e) => handleModelChange(e.target.value)}
+                            disabled={saveModelMutation.isPending}
+                            className="input appearance-none pr-10 cursor-pointer"
+                          >
+                            <option value="">Auto (default)</option>
+                            {modelsData?.models.map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            {saveModelMutation.isPending ? (
+                              <Loader2 size={16} className="animate-spin text-text-muted" />
+                            ) : (
+                              <ChevronDown size={16} className="text-text-muted" />
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Model Result */}
+                      {modelResult && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${
+                            modelResult.success
+                              ? 'bg-green-400/10 text-green-400'
+                              : 'bg-red-400/10 text-red-400'
+                          }`}
+                        >
+                          {modelResult.success ? (
+                            <Check size={16} />
+                          ) : (
+                            <AlertCircle size={16} />
+                          )}
+                          <span className="text-sm">{modelResult.message}</span>
+                        </motion.div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* Divider */}
                 <div className="border-t border-border" />

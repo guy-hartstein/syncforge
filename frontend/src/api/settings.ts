@@ -5,6 +5,7 @@ export interface UserSettings {
   has_cursor_api_key: boolean
   github_connected: boolean
   github_username: string | null
+  preferred_model: string | null
   created_at: string
   updated_at: string
 }
@@ -15,19 +16,35 @@ export interface TestConnectionResult {
   user_email?: string
 }
 
+export interface ModelsResponse {
+  models: string[]
+  error?: string
+}
+
+export interface UpdateSettingsPayload {
+  cursor_api_key?: string
+  preferred_model?: string
+}
+
 export async function fetchSettings(): Promise<UserSettings> {
   const response = await fetch(API_BASE)
   if (!response.ok) throw new Error('Failed to fetch settings')
   return response.json()
 }
 
-export async function updateSettings(cursorApiKey: string): Promise<UserSettings> {
+export async function updateSettings(payload: UpdateSettingsPayload): Promise<UserSettings> {
   const response = await fetch(API_BASE, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cursor_api_key: cursorApiKey }),
+    body: JSON.stringify(payload),
   })
   if (!response.ok) throw new Error('Failed to update settings')
+  return response.json()
+}
+
+export async function fetchModels(): Promise<ModelsResponse> {
+  const response = await fetch(`${API_BASE}/models`)
+  if (!response.ok) throw new Error('Failed to fetch models')
   return response.json()
 }
 
