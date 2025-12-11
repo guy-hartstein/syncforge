@@ -15,6 +15,8 @@ SyncForge is built for teams and developers who maintain **multiple codebases th
 
 If you've ever spent hours copy-pasting the same change across repositories—or worse, forgotten one, SyncForge automates that process with cloud agents that understand your codebase conventions.
 
+📍 **[View the Roadmap →](./ROADMAP.md)** — See what's coming next and how to contribute to future features.
+
 ---
 
 ## Part 1: What is SyncForge?
