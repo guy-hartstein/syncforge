@@ -7,7 +7,7 @@ export interface ChatMessage {
 
 export interface Attachment {
   id: string
-  type: 'file' | 'url' | 'github_pr'
+  type: 'file' | 'url' | 'github_pr' | 'linear_issue'
   name: string
   url?: string
   file_path?: string
@@ -87,6 +87,13 @@ export interface PRAttachmentRequest {
   url: string
 }
 
+export interface LinearAttachmentRequest {
+  issue_id: string
+  identifier: string
+  title: string
+  url: string
+}
+
 export async function addPRAttachment(sessionId: string, pr: PRAttachmentRequest): Promise<Attachment> {
   const response = await fetch(`${API_BASE}/${sessionId}/attachments/pr`, {
     method: 'POST',
@@ -96,6 +103,19 @@ export async function addPRAttachment(sessionId: string, pr: PRAttachmentRequest
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Failed to add PR' }))
     throw new Error(error.detail || 'Failed to add PR attachment')
+  }
+  return response.json()
+}
+
+export async function addLinearAttachment(sessionId: string, issue: LinearAttachmentRequest): Promise<Attachment> {
+  const response = await fetch(`${API_BASE}/${sessionId}/attachments/linear`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(issue),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to add Linear issue' }))
+    throw new Error(error.detail || 'Failed to add Linear issue attachment')
   }
   return response.json()
 }

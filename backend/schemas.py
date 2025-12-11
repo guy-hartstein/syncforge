@@ -73,6 +73,13 @@ class AttachmentPRRequest(BaseModel):
     url: str
 
 
+class AttachmentLinearRequest(BaseModel):
+    issue_id: str
+    identifier: str
+    title: str
+    url: str
+
+
 class IntegrationConfig(BaseModel):
     integration_id: str
     custom_instructions: str = ""
@@ -228,6 +235,7 @@ class UserSettingsResponse(BaseModel):
     has_cursor_api_key: bool  # Don't expose actual key
     github_connected: bool = False  # Whether GitHub PAT is configured
     github_username: Optional[str] = None  # GitHub username if connected
+    linear_connected: bool = False  # Whether Linear API key is configured
     preferred_model: Optional[str] = None  # Preferred model for agents
     created_at: datetime
     updated_at: datetime

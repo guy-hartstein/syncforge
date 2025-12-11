@@ -3,6 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Link2, Upload, X, FileText, ExternalLink, Plus, GitPullRequest } from 'lucide-react'
 import type { Attachment } from '../../api/wizard'
 import { GitHubPRPicker } from './GitHubPRPicker'
+import { LinearIssuePicker } from './LinearIssuePicker'
+
+// Linear icon component
+function LinearIcon({ size = 16, className }: { size?: number; className?: string }) {
+  return <img src="/linear.png" alt="Linear" width={size} height={size} className={className} />
+}
 
 interface PRSelection {
   owner: string
@@ -12,14 +18,23 @@ interface PRSelection {
   url: string
 }
 
+interface LinearIssueSelection {
+  issue_id: string
+  identifier: string
+  title: string
+  url: string
+}
+
 interface AttachmentPanelProps {
   attachments: Attachment[]
   onUploadFile: (file: File) => void
   onAddUrl: (url: string, name?: string) => void
   onAddPR: (pr: PRSelection) => void
+  onAddLinearIssue: (issue: LinearIssueSelection) => void
   onRemove: (id: string) => void
   isUploading: boolean
   isAddingPR?: boolean
+  isAddingLinear?: boolean
 }
 
 export function AttachmentPanel({
@@ -27,13 +42,16 @@ export function AttachmentPanel({
   onUploadFile,
   onAddUrl,
   onAddPR,
+  onAddLinearIssue,
   onRemove,
   isUploading,
-  isAddingPR = false
+  isAddingPR = false,
+  isAddingLinear = false
 }: AttachmentPanelProps) {
   const [urlInput, setUrlInput] = useState('')
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [showPRPicker, setShowPRPicker] = useState(false)
+  const [showLinearPicker, setShowLinearPicker] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -80,8 +98,21 @@ export function AttachmentPanel({
     })
   }
 
+  const handleAddLinearIssue = (issue: { id: string; identifier: string; title: string; url: string }) => {
+    onAddLinearIssue({
+      issue_id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      url: issue.url
+    })
+  }
+
   const isGitHubPR = (url: string, type?: string) => {
     return type === 'github_pr' || (url?.includes('github.com') && url?.includes('/pull/'))
+  }
+
+  const isLinearIssue = (type?: string) => {
+    return type === 'linear_issue'
   }
 
   return (
@@ -95,6 +126,13 @@ export function AttachmentPanel({
             title="Link GitHub PR"
           >
             <GitPullRequest size={16} />
+          </button>
+          <button
+            onClick={() => setShowLinearPicker(true)}
+            className="p-1.5 rounded-lg hover:bg-[#5E6AD2]/10 text-text-muted hover:text-[#5E6AD2] transition-colors"
+            title="Link Linear Issue"
+          >
+            <LinearIcon size={16} />
           </button>
           <button
             onClick={() => setShowUrlInput(true)}
@@ -187,12 +225,16 @@ export function AttachmentPanel({
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                 isGitHubPR(attachment.url || '', attachment.type)
                   ? 'bg-green-500/10'
+                  : isLinearIssue(attachment.type)
+                  ? 'bg-[#5E6AD2]/10'
                   : attachment.type === 'url'
                   ? 'bg-blue-500/10'
                   : 'bg-amber-500/10'
               }`}>
                 {isGitHubPR(attachment.url || '', attachment.type) ? (
                   <GitPullRequest size={16} className="text-green-400" />
+                ) : isLinearIssue(attachment.type) ? (
+                  <LinearIcon size={16} className="text-[#5E6AD2]" />
                 ) : attachment.type === 'url' ? (
                   <ExternalLink size={16} className="text-blue-400" />
                 ) : (
@@ -241,6 +283,15 @@ export function AttachmentPanel({
             <p className="text-sm text-text-muted">Fetching PR diff...</p>
           </div>
         )}
+
+        {isAddingLinear && (
+          <div className="flex items-center gap-3 p-3 bg-surface rounded-lg border border-border">
+            <div className="w-8 h-8 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-[#5E6AD2] border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="text-sm text-text-muted">Fetching issue details...</p>
+          </div>
+        )}
       </div>
 
       {/* GitHub PR Picker Modal */}
@@ -248,6 +299,13 @@ export function AttachmentPanel({
         isOpen={showPRPicker}
         onClose={() => setShowPRPicker(false)}
         onSelectPR={handleAddPR}
+      />
+
+      {/* Linear Issue Picker Modal */}
+      <LinearIssuePicker
+        isOpen={showLinearPicker}
+        onClose={() => setShowLinearPicker(false)}
+        onSelectIssue={handleAddLinearIssue}
       />
     </div>
   )

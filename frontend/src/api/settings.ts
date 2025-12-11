@@ -5,6 +5,7 @@ export interface UserSettings {
   has_cursor_api_key: boolean
   github_connected: boolean
   github_username: string | null
+  linear_connected: boolean
   preferred_model: string | null
   created_at: string
   updated_at: string

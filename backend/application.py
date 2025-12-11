@@ -7,6 +7,7 @@ from database import Base, engine
 import models  # noqa: F401 - Import models to register them with Base before create_all
 from routes.github import router as github_router
 from routes.integrations import router as integrations_router
+from routes.linear import router as linear_router
 from routes.update_wizard import router as wizard_router
 from routes.updates import router as updates_router
 from routes.agents import router as agents_router
@@ -27,6 +28,9 @@ def run_migrations():
         columns = [row[1] for row in result.fetchall()]
         if "preferred_model" not in columns:
             conn.execute(text("ALTER TABLE user_settings ADD COLUMN preferred_model VARCHAR(100)"))
+            conn.commit()
+        if "linear_api_key" not in columns:
+            conn.execute(text("ALTER TABLE user_settings ADD COLUMN linear_api_key TEXT"))
             conn.commit()
 
 
@@ -49,6 +53,7 @@ app.add_middleware(
 
 app.include_router(integrations_router)
 app.include_router(github_router)
+app.include_router(linear_router)
 app.include_router(wizard_router)
 app.include_router(updates_router)
 app.include_router(agents_router)

@@ -11,10 +11,12 @@ import {
   uploadFile,
   addUrl,
   addPRAttachment,
+  addLinearAttachment,
   removeAttachment,
   type ChatMessage,
   type Attachment,
-  type PRAttachmentRequest
+  type PRAttachmentRequest,
+  type LinearAttachmentRequest
 } from '../../api/wizard'
 import { createUpdate } from '../../api/updates'
 import type { Integration } from '../../types'
@@ -36,6 +38,7 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
   const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isAddingPR, setIsAddingPR] = useState(false)
+  const [isAddingLinear, setIsAddingLinear] = useState(false)
   const [settingsIntegration, setSettingsIntegration] = useState<Integration | null>(null)
   const [autoCreatePr, setAutoCreatePr] = useState(false)
 
@@ -116,6 +119,20 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
       console.error('Failed to add PR:', error)
     } finally {
       setIsAddingPR(false)
+    }
+  }, [sessionId])
+
+  const handleAddLinearIssue = useCallback(async (issue: LinearAttachmentRequest) => {
+    if (!sessionId) return
+
+    setIsAddingLinear(true)
+    try {
+      const attachment = await addLinearAttachment(sessionId, issue)
+      setAttachments(prev => [...prev, attachment])
+    } catch (error) {
+      console.error('Failed to add Linear issue:', error)
+    } finally {
+      setIsAddingLinear(false)
     }
   }, [sessionId])
 
@@ -248,9 +265,11 @@ export function UpdateWizard({ isOpen, onClose, onUpdateCreated, integrations }:
                       onUploadFile={handleUploadFile}
                       onAddUrl={handleAddUrl}
                       onAddPR={handleAddPR}
+                      onAddLinearIssue={handleAddLinearIssue}
                       onRemove={handleRemoveAttachment}
                       isUploading={isUploading}
                       isAddingPR={isAddingPR}
+                      isAddingLinear={isAddingLinear}
                     />
                     
                     <div className="border-t border-border pt-6">

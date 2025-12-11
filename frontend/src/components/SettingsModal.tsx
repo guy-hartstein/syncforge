@@ -4,7 +4,13 @@ import { X, Key, Check, AlertCircle, Loader2, Trash2, Github, ChevronDown } from
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSettings, updateSettings, testConnection, deleteCursorApiKey, fetchModels } from '../api/settings'
 import { saveGitHubToken, deleteGitHubToken } from '../api/github'
+import { saveLinearToken, deleteLinearToken } from '../api/linear'
 import { useConfirm } from './ConfirmDialog'
+
+// Linear icon component
+function LinearIcon({ className }: { className?: string }) {
+  return <img src="/linear.png" alt="Linear" className={className} />
+}
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -14,8 +20,10 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState('')
   const [githubToken, setGithubToken] = useState('')
+  const [linearToken, setLinearToken] = useState('')
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
   const [githubResult, setGithubResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [linearResult, setLinearResult] = useState<{ success: boolean; message: string } | null>(null)
   const [modelResult, setModelResult] = useState<{ success: boolean; message: string } | null>(null)
   const queryClient = useQueryClient()
   const confirm = useConfirm()
@@ -95,12 +103,35 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     },
   })
 
+  const saveLinearMutation = useMutation({
+    mutationFn: saveLinearToken,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      setLinearToken('')
+      setLinearResult({ success: true, message: `Connected as ${result.name || result.email}` })
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : 'Failed to save API key'
+      setLinearResult({ success: false, message })
+    },
+  })
+
+  const deleteLinearMutation = useMutation({
+    mutationFn: deleteLinearToken,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] })
+      setLinearResult({ success: true, message: 'Linear disconnected' })
+    },
+  })
+
   useEffect(() => {
     if (!isOpen) {
       setApiKey('')
       setGithubToken('')
+      setLinearToken('')
       setTestResult(null)
       setGithubResult(null)
+      setLinearResult(null)
       setModelResult(null)
     }
   }, [isOpen])
@@ -146,6 +177,24 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     })
     if (confirmed) {
       deleteGitHubMutation.mutate()
+    }
+  }
+
+  const handleSaveLinear = () => {
+    if (linearToken.trim()) {
+      saveLinearMutation.mutate(linearToken.trim())
+    }
+  }
+
+  const handleDisconnectLinear = async () => {
+    const confirmed = await confirm({
+      title: 'Disconnect Linear',
+      message: 'Are you sure you want to disconnect your Linear account? You will no longer be able to link Linear issues.',
+      confirmText: 'Disconnect',
+      variant: 'danger',
+    })
+    if (confirmed) {
+      deleteLinearMutation.mutate()
     }
   }
 
@@ -432,6 +481,95 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         <AlertCircle size={16} />
                       )}
                       <span className="text-sm">{githubResult.message}</span>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-border" />
+
+                {/* Linear Section */}
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-2">
+                    Linear API Key
+                  </label>
+                  <p className="text-xs text-text-muted mb-3">
+                    Create an API key from{' '}
+                    <a
+                      href="https://linear.app/settings/api"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-accent hover:underline"
+                    >
+                      Linear Settings → API
+                    </a>
+                  </p>
+
+                  {settings?.linear_connected ? (
+                    <div className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border">
+                      <div className="flex items-center gap-2">
+                        <LinearIcon className="w-4 h-4 text-[#5E6AD2]" />
+                        <span className="text-sm text-text-secondary">Linear connected</span>
+                      </div>
+                      <button
+                        onClick={handleDisconnectLinear}
+                        disabled={deleteLinearMutation.isPending}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors"
+                        title="Disconnect Linear"
+                      >
+                        {deleteLinearMutation.isPending ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <input
+                        type="password"
+                        value={linearToken}
+                        onChange={(e) => setLinearToken(e.target.value)}
+                        placeholder="lin_api_xxxxxxxxxxxxxxxxxxxx"
+                        className="input"
+                      />
+                      <button
+                        onClick={handleSaveLinear}
+                        disabled={!linearToken.trim() || saveLinearMutation.isPending}
+                        className="btn-secondary w-full flex items-center justify-center gap-2"
+                      >
+                        {saveLinearMutation.isPending ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <LinearIcon className="w-4 h-4" />
+                            Connect Linear
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Linear Result */}
+                  {linearResult && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`mt-3 p-3 rounded-lg flex items-center gap-2 ${
+                        linearResult.success
+                          ? 'bg-green-400/10 text-green-400'
+                          : 'bg-red-400/10 text-red-400'
+                      }`}
+                    >
+                      {linearResult.success ? (
+                        <Check size={16} />
+                      ) : (
+                        <AlertCircle size={16} />
+                      )}
+                      <span className="text-sm">{linearResult.message}</span>
                     </motion.div>
                   )}
                 </div>

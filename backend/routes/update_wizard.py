@@ -12,7 +12,8 @@ from database import get_db
 from models import UserSettings
 from schemas import (
     ChatRequest, ChatResponse, WizardSession, WizardStartResponse,
-    ChatMessage, Attachment, AttachmentUrlRequest, AttachmentPRRequest, WizardConfigRequest
+    ChatMessage, Attachment, AttachmentUrlRequest, AttachmentPRRequest, 
+    AttachmentLinearRequest, WizardConfigRequest
 )
 from agents.update_agent import get_update_agent
 
@@ -272,6 +273,106 @@ async def add_pr_attachment(session_id: str, request: AttachmentPRRequest, db: S
         "id": str(uuid.uuid4()),
         "type": "github_pr",
         "name": f"PR #{request.pr_number}: {request.title}",
+        "url": request.url,
+        "file_path": None,
+        "content": content
+    }
+    sessions[session_id]["attachments"].append(attachment)
+    
+    return Attachment(**attachment)
+
+
+@router.post("/{session_id}/attachments/linear")
+async def add_linear_attachment(session_id: str, request: AttachmentLinearRequest, db: Session = Depends(get_db)):
+    """Add a Linear issue attachment with its details."""
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get Linear API key
+    settings = db.query(UserSettings).first()
+    if not settings or not settings.linear_api_key:
+        raise HTTPException(status_code=401, detail="Linear not connected")
+    
+    token = settings.linear_api_key
+    
+    # Fetch issue details
+    query = """
+        query($issueId: String!) {
+            issue(id: $issueId) {
+                id
+                identifier
+                title
+                description
+                url
+                state {
+                    name
+                }
+                priority
+                priorityLabel
+                assignee {
+                    name
+                }
+                team {
+                    name
+                }
+                labels {
+                    nodes {
+                        name
+                    }
+                }
+                createdAt
+                updatedAt
+            }
+        }
+    """
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.linear.app/graphql",
+            json={"query": query, "variables": {"issueId": request.issue_id}},
+            headers={
+                "Authorization": token,
+                "Content-Type": "application/json",
+            },
+            timeout=15.0
+        )
+        
+        if response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Linear API key expired or invalid")
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch issue")
+        
+        data = response.json()
+        if "errors" in data:
+            raise HTTPException(status_code=400, detail=data["errors"][0].get("message", "GraphQL error"))
+        
+        issue = data.get("data", {}).get("issue")
+        if not issue:
+            raise HTTPException(status_code=404, detail="Issue not found")
+    
+    # Build comprehensive issue content for the agent
+    description = issue.get("description") or "No description provided."
+    labels = [label["name"] for label in issue.get("labels", {}).get("nodes", [])]
+    labels_str = ", ".join(labels) if labels else "None"
+    assignee = issue.get("assignee", {}).get("name") if issue.get("assignee") else "Unassigned"
+    
+    content = f"""## Linear Issue {issue['identifier']}: {issue['title']}
+
+**Team:** {issue.get('team', {}).get('name', 'Unknown')}
+**Status:** {issue.get('state', {}).get('name', 'Unknown')}
+**Priority:** {issue.get('priorityLabel', 'No priority')}
+**Assignee:** {assignee}
+**Labels:** {labels_str}
+
+### Description
+{description}
+"""
+    
+    attachment = {
+        "id": str(uuid.uuid4()),
+        "type": "linear_issue",
+        "name": f"{issue['identifier']}: {request.title}",
         "url": request.url,
         "file_path": None,
         "content": content
