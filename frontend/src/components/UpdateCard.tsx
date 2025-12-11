@@ -72,7 +72,7 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
   
   const integrationStatuses = update.integration_statuses || []
   const completedCount = integrationStatuses.filter(
-    s => s.status === 'complete' || s.status === 'skipped'
+    s => s.status === 'complete' || s.status === 'skipped' || s.status === 'ready_to_merge'
   ).length
   const totalCount = integrationStatuses.length
   const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
