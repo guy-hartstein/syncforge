@@ -77,6 +77,7 @@ The Update Wizard guides you through defining changes that will be applied acros
 Provide context to help the AI understand your requirements:
 
 - **GitHub PRs**: Reference existing pull requests—diffs are automatically extracted and included as context
+- **Linear Issues**: Attach Linear issues to provide requirements and acceptance criteria as context
 - **Files**: Upload documentation, specs, or example code
 - **URLs**: Link to API docs, design specs, or reference implementations
 
@@ -160,6 +161,7 @@ No manual refresh needed—the UI updates automatically as agents make progress.
 - OpenAI API key (for the update wizard agent)
 - Cursor API key (for cloud agent automation)
 - GitHub Personal Access Token (for repository access and PR creation)
+- Linear API key (optional, for attaching Linear issues as context)
 
 ### Backend Setup
 
@@ -210,6 +212,7 @@ Configure API keys in the Settings modal within the application:
 
 - **Cursor API Key**: Required for launching cloud agents to implement updates
 - **GitHub PAT**: Required for accessing private repositories and creating PRs
+- **Linear API Key**: Optional—enables attaching Linear issues to updates for additional context
 
 ---
 
