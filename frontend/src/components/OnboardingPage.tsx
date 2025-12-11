@@ -8,6 +8,7 @@ import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
 import { UpdateCard } from './UpdateCard'
 import { SettingsModal } from './SettingsModal'
+import { Walkthrough } from './Walkthrough'
 import { useConfirm } from './ConfirmDialog'
 import { fetchIntegrations, createIntegration, updateIntegration, deleteIntegration } from '../api/integrations'
 import { fetchUpdates, deleteUpdate } from '../api/updates'
@@ -269,6 +270,8 @@ export function OnboardingPage() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
+
+      <Walkthrough />
     </div>
   )
 }
