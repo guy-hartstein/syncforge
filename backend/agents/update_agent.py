@@ -6,56 +6,18 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 import os
 
+from prompts import IMPLEMENTATION_REQUIREMENTS, UPDATE_WIZARD_SYSTEM_PROMPT
+
 
 class MemoryExtraction(BaseModel):
     """Structured output for memory extraction."""
     memory: str = Field(default="", description="The extracted memory, or empty string if none")
 
 
-
-
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     clarification_count: int
     ready_to_proceed: bool
-
-
-IMPLEMENTATION_REQUIREMENTS = """
-## Code Quality Requirements (CRITICAL)
-- **PRESERVE EXISTING CODE STYLE**: Match the formatting patterns already present in each file. If parameters are defined inline, keep them inline. If the codebase uses single-line definitions, do not expand to multi-line JSON/dict formats.
-- **FOCUS ON THE TASK AT HAND**: Only make changes that are directly related to the task at hand. Do not reformat, reorganize, or "improve" code that isn't directly related to the update. 
-- **CONSISTENT FORMATTING**: Follow the existing indentation (spaces vs tabs, indent size), line length conventions, and bracket placement style of each repository.
-- **PRECISE INDENTATION**: Pay meticulous attention to indentation levels. Python is whitespace-sensitive - incorrect indentation causes runtime errors. Always match the exact indentation pattern of surrounding code.
-- **MINIMAL DIFF**: Make the smallest possible changes to achieve the goal. Avoid reformatting, reorganizing, or "improving" code that isn't directly related to the update. Never add new tests or documentation unless explicitly requested.
-- **LINT-CLEAN**: Ensure changes pass standard linting (no trailing whitespace, consistent quotes, proper spacing around operators).
-
-## Security Requirements for Public Integrations
-- If any integration is marked as PUBLIC or external-facing, DO NOT expose internal implementation details such as: internal parameter names (e.g., use_cache, internal_timeout), internal endpoints, debug flags, internal IDs, or any configuration that reveals system architecture.
-- Public integrations should only expose the documented public API surface.
-- When in doubt, ask for clarification before exposing any parameter or detail.
-"""
-
-SYSTEM_PROMPT = """You are an assistant helping users update their software integrations. Your role is to:
-
-1. Understand what changes the user wants to make to their integrations
-2. Ask clarifying questions as needed to ensure you understand the scope and details
-3. Summarize the update request when you have enough information
-
-Keep your responses concise and friendly. Focus on:
-- What specific changes are being made (API updates, bug fixes, new features, etc.)
-- Any breaking changes or special considerations
-- Parameter types, default values, optionality, etc.
-- Technical details that would help implement the update
-
-IMPORTANT: 
-- Do NOT ask which integrations are affected - the user selects that separately in the UI
-- If the user attaches a GitHub PR or other reference, review it carefully and use the information from the diff/content to understand the changes
-- When a PR is attached, acknowledge it and summarize the key changes you see in the diff
-- Ask if any of the selected integrations are PUBLIC (external-facing). Public integrations require extra care to avoid exposing internal implementation details (e.g., internal parameter names, debug flags, cache configs).
-
-When you feel you have enough information, end your message with: "I have enough information to proceed. Click 'Start Update' when you're ready."
-
-Continue the conversation naturally until you have a clear understanding of what needs to be updated."""
 
 
 class UpdateAgent:
@@ -79,7 +41,7 @@ class UpdateAgent:
                 # Mock response when no API key
                 return self._mock_response(state)
             
-            messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
+            messages = [SystemMessage(content=UPDATE_WIZARD_SYSTEM_PROMPT)] + state["messages"]
             response = self.llm.invoke(messages)
             
             # Check if ready to proceed
@@ -137,7 +99,7 @@ class UpdateAgent:
             return "Hi! I'll help you update your integrations. What changes would you like to make? Feel free to describe the update, link any PRs, or attach relevant files."
         
         messages = [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=UPDATE_WIZARD_SYSTEM_PROMPT),
             HumanMessage(content="Start the conversation by greeting me and asking what updates I want to make.")
         ]
         response = self.llm.invoke(messages)

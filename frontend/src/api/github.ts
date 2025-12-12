@@ -105,6 +105,9 @@ export interface BranchStatusResponse {
   branch_exists: boolean
   pr_url: string | null
   pr_number: number | null
+  pr_state: string | null  // open, closed, or merged
+  merged: boolean
+  merged_at: string | null
   last_commit_sha: string | null
 }
 
@@ -125,6 +128,8 @@ export interface GitHubPRDetails {
   body: string | null
   html_url: string
   state: string
+  merged: boolean
+  merged_at: string | null
   user_login: string
   head_ref: string
   base_ref: string
@@ -132,6 +137,35 @@ export interface GitHubPRDetails {
   additions: number
   deletions: number
   changed_files: number
+}
+
+export interface PRStatusResponse {
+  state: string
+  merged: boolean
+  merged_at: string | null
+}
+
+// Parse PR URL to extract owner, repo, and PR number
+export function parsePrUrl(prUrl: string): { owner: string; repo: string; prNumber: number } | null {
+  const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+  if (!match) return null
+  return { owner: match[1], repo: match[2], prNumber: parseInt(match[3], 10) }
+}
+
+export async function getPRStatus(owner: string, repo: string, prNumber: number): Promise<PRStatusResponse> {
+  const response = await fetch(`${API_BASE}/repos/${owner}/${repo}/pulls/${prNumber}/status`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch PR status')
+  }
+  return response.json()
+}
+
+export async function getIntegrationPRStatus(updateId: string, integrationId: string): Promise<PRStatusResponse> {
+  const response = await fetch(`${API_BASE}/integration/${updateId}/${integrationId}/pr-status`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch integration PR status')
+  }
+  return response.json()
 }
 
 export async function getPullRequestDetails(

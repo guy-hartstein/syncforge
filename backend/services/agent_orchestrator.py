@@ -4,11 +4,58 @@ Agent Orchestrator - Manages Cursor Cloud Agents for integration updates.
 
 import re
 import uuid
+from datetime import datetime
 from typing import Optional, List
+import httpx
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from .cursor_client import CursorClient, AgentStatus, CursorClientError
-from models import Update, UpdateIntegration, Integration, UpdateIntegrationStatus
+from models import Update, UpdateIntegration, Integration, UpdateIntegrationStatus, UserSettings
+from prompts import AGENT_TASK_PROMPT_TEMPLATE
+
+
+def parse_pr_url(pr_url: str) -> tuple[str, str, int] | None:
+    """Extract owner, repo, and PR number from a GitHub PR URL."""
+    match = re.match(r'https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)', pr_url)
+    if match:
+        return match.group(1), match.group(2), int(match.group(3))
+    return None
+
+
+async def check_pr_merged(pr_url: str, github_token: str) -> tuple[bool, Optional[datetime]]:
+    """
+    Check if a PR has been merged via GitHub API.
+    
+    Returns:
+        Tuple of (is_merged, merged_at_datetime)
+    """
+    parsed = parse_pr_url(pr_url)
+    if not parsed:
+        return False, None
+    
+    owner, repo, pr_number = parsed
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+                headers={
+                    "Authorization": f"Bearer {github_token}",
+                    "Accept": "application/vnd.github.v3+json",
+                },
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                pr_data = response.json()
+                merged_at = pr_data.get("merged_at")
+                if merged_at:
+                    return True, datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
+        except Exception:
+            pass
+    
+    return False, None
 
 
 def generate_branch_name(integration_name: str, prefix: str = "feat") -> str:
@@ -26,47 +73,6 @@ def generate_branch_name(integration_name: str, prefix: str = "feat") -> str:
     slug = re.sub(r'[^a-z0-9]+', '-', integration_name.lower()).strip('-')
     short_id = uuid.uuid4().hex[:6]
     return f"{prefix}/{slug}-{short_id}"
-
-
-PROMPT_TEMPLATE = """# Integration Update Task
-{user_memories_section}
-## Implementation Guide
-{implementation_guide}
-
-## Target Integration: {integration_name}
-
-### GitHub Repositories
-{github_links}
-
-### Integration Instructions
-{integration_instructions}
-
-### Custom Instructions for This Update
-{custom_instructions}
-
-## Your Task
-
-**IMPORTANT: Before making any changes, first check if the changes described in the implementation guide have already been implemented in the codebase.** Search for the relevant code patterns, function names, or features mentioned in the guide. If the changes are already present and complete, report that no changes are needed and end the task without modifying any files.
-
-If the changes have NOT been made yet, proceed with the implementation:
-1. Apply the changes described in the implementation guide to this integration's codebase
-2. Follow the integration-specific instructions carefully
-3. If you need clarification on any aspect of the update, ask a clear question and wait for a response before proceeding
-
-## Code Style Requirements (MUST FOLLOW)
-
-**Keep edits extremely minimal, focused, and to the point.** Follow these principles:
-- Only change what is strictly necessary to implement the requested feature 
-- Never change things that are not related to the task at hand
-- Match the existing code style, patterns, and conventions of the project
-- When adding parameters, functions, or fields, keep them consistent with similar existing code
-- Do NOT create extraneous examples, READMEs, documentation files, or test files unless explicitly requested
-- Do NOT refactor, reorganize, or "improve" code that is unrelated to the task
-- Do NOT add extra error handling, validation, or features beyond what was requested
-- Aim for changes that fit seamlessly into the codebase as if a team member wrote them
-
-**CRITICAL: When you're done, you MUST push your changes to the following branch: `{branch_name}`**. Push to this exact branch name. Do not end the task until the branch has been pushed.
-"""
 
 
 class AgentOrchestrator:
@@ -108,7 +114,7 @@ The user has specified the following preferences for this integration. You MUST 
 
 """
         
-        return PROMPT_TEMPLATE.format(
+        return AGENT_TASK_PROMPT_TEMPLATE.format(
             user_memories_section=user_memories_section,
             implementation_guide=implementation_guide or "No implementation guide provided.",
             integration_name=integration.name,
@@ -243,7 +249,7 @@ The user has specified the following preferences for this integration. You MUST 
         db: Session
     ) -> Optional[dict]:
         """
-        Sync the status of a single agent from Cursor API.
+        Sync the status of a single agent from Cursor API and check PR merge status.
         
         Args:
             update_integration_id: The UpdateIntegration ID
@@ -266,34 +272,44 @@ The user has specified the following preferences for this integration. You MUST 
                 conversation = await client.get_conversation(ui.cursor_agent_id)
             
             # Update branch and PR info
-            # Only set branch name from Cursor if we don't already have one
-            # (we pass our generated branch name to Cursor, so trust our stored value)
             if agent_info.branch_name and not ui.cursor_branch_name:
                 ui.cursor_branch_name = agent_info.branch_name
             if agent_info.pr_url:
                 ui.pr_url = agent_info.pr_url
             
-            # Store conversation - merge to preserve locally stored user messages
-            # that Cursor API might not have returned yet
-            cursor_messages = [
+            # Store conversation from Cursor (source of truth)
+            ui.conversation = [
                 {"id": msg.id, "type": msg.type, "text": msg.text}
                 for msg in conversation
             ]
+            flag_modified(ui, "conversation")
             
-            # Get existing local user messages (ones we stored, with "user-" prefix IDs)
-            existing_conversation = ui.conversation or []
-            local_user_messages = [
-                m for m in existing_conversation 
-                if m.get("type") == "user_message" and m.get("id", "").startswith("user-")
-            ]
+            # Check PR merge status if we have a PR and it's not already cached as merged
+            if ui.pr_url and not ui.pr_merged:
+                settings = db.query(UserSettings).first()
+                if settings and settings.github_pat:
+                    merged, merged_at = await check_pr_merged(ui.pr_url, settings.github_pat)
+                    if merged:
+                        ui.pr_merged = True
+                        ui.pr_merged_at = merged_at
+                        ui.status = UpdateIntegrationStatus.COMPLETE.value
+                        db.commit()
+                        return {
+                            "status": ui.status,
+                            "branch_name": ui.cursor_branch_name,
+                            "pr_url": ui.pr_url,
+                            "agent_status": agent_info.status.value
+                        }
             
-            # Check which local user messages aren't in Cursor's response
-            cursor_msg_texts = {m["text"] for m in cursor_messages if m.get("type") == "user_message"}
-            missing_user_msgs = [m for m in local_user_messages if m["text"] not in cursor_msg_texts]
-            
-            # Use Cursor's conversation but append any missing user messages at the end
-            # (they should appear after the last message Cursor knows about)
-            ui.conversation = cursor_messages + missing_user_msgs
+            # Skip status updates if PR is already merged (cached state is authoritative)
+            if ui.pr_merged:
+                db.commit()
+                return {
+                    "status": ui.status,
+                    "branch_name": ui.cursor_branch_name,
+                    "pr_url": ui.pr_url,
+                    "agent_status": agent_info.status.value
+                }
             
             # Check for questions in conversation (last assistant message ends with ?)
             has_pending_question = False
@@ -309,16 +325,12 @@ The user has specified the following preferences for this integration. You MUST 
                     has_pending_question = True
             
             # Map Cursor status to our status
-            # If there's a pending question, always set NEEDS_REVIEW so user can respond
             if has_pending_question:
                 ui.status = UpdateIntegrationStatus.NEEDS_REVIEW.value
             elif agent_info.status == AgentStatus.RUNNING or agent_info.status == AgentStatus.CREATING:
                 ui.status = UpdateIntegrationStatus.IN_PROGRESS.value
             elif agent_info.status == AgentStatus.FINISHED:
-                if agent_info.pr_url:
-                    ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
-                else:
-                    ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
+                ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
             elif agent_info.status == AgentStatus.STOPPED:
                 ui.status = UpdateIntegrationStatus.CANCELLED.value
                 ui.agent_question = ui.agent_question or "Agent stopped by user"
@@ -368,7 +380,7 @@ The user has specified the following preferences for this integration. You MUST 
                     if status:
                         results["synced"] += 1
                         results["statuses"][ui.integration_id] = status
-                except Exception as e:
+                except Exception:
                     results["errors"] += 1
         
         # Check if all integrations are complete
@@ -417,16 +429,8 @@ The user has specified the following preferences for this integration. You MUST 
             async with CursorClient(api_key) as client:
                 await client.send_followup(ui.cursor_agent_id, text)
             
-            # Store the user message in conversation
-            conversation = ui.conversation or []
-            conversation.append({
-                "id": f"user-{uuid.uuid4().hex[:8]}",
-                "type": "user_message",
-                "text": text
-            })
-            ui.conversation = conversation
-            
             # Clear the question and set back to in progress
+            # Conversation will be updated on next sync from Cursor
             ui.agent_question = None
             ui.status = UpdateIntegrationStatus.IN_PROGRESS.value
             db.commit()

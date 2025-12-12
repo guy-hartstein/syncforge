@@ -120,6 +120,8 @@ class UpdateIntegrationBase(BaseModel):
     integration_id: str
     status: str = "pending"
     pr_url: Optional[str] = None
+    pr_merged: bool = False  # Cached merged status
+    pr_merged_at: Optional[datetime] = None  # When the PR was merged
     agent_question: Optional[str] = None
     custom_instructions: str = ""
     cursor_agent_id: Optional[str] = None

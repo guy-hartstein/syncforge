@@ -7,6 +7,7 @@ import {
   Check, 
   AlertCircle, 
   GitPullRequest,
+  GitMerge,
   SkipForward,
   Clock,
   Trash2,
@@ -62,6 +63,12 @@ const statusConfig: Record<UpdateIntegrationStatus['status'], {
     color: 'text-green-400',
     bgColor: 'bg-green-400/10',
     label: 'Complete'
+  },
+  cancelled: {
+    icon: <SkipForward size={12} />,
+    color: 'text-red-400',
+    bgColor: 'bg-red-400/10',
+    label: 'Cancelled'
   }
 }
 
@@ -243,9 +250,10 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-accent hover:text-accent-hover"
+                          className={status.status === 'complete' ? 'text-purple-400 hover:text-purple-300' : 'text-accent hover:text-accent-hover'}
+                          title={status.status === 'complete' ? 'Merged' : 'View PR'}
                         >
-                          <GitPullRequest size={14} />
+                          {status.status === 'complete' ? <GitMerge size={14} /> : <GitPullRequest size={14} />}
                         </a>
                       )}
                     </div>

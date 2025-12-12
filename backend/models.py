@@ -61,6 +61,8 @@ class UpdateIntegration(Base):
     integration_id = Column(String(36), ForeignKey("integrations.id", ondelete="CASCADE"), nullable=False)
     status = Column(String(20), default=UpdateIntegrationStatus.PENDING.value)
     pr_url = Column(String(500), nullable=True)
+    pr_merged = Column(Boolean, default=False)  # Cached merged status
+    pr_merged_at = Column(DateTime, nullable=True)  # When the PR was merged
     agent_question = Column(Text, nullable=True)
     custom_instructions = Column(Text, default="")
     cursor_agent_id = Column(String(50), nullable=True)  # Cursor agent ID (e.g., "bc_abc123")

@@ -4,6 +4,7 @@ import {
   Send,
   GitBranch,
   GitPullRequest,
+  GitMerge,
   StopCircle,
   AlertCircle,
   CheckCircle,
@@ -21,7 +22,7 @@ import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { sendFollowup, stopAgent, updateIntegrationSettings } from '../api/agents'
-import { checkBranchStatus, getPullRequestDetails, type GitHubPRDetails } from '../api/github'
+import { checkBranchStatus, getPullRequestDetails, getIntegrationPRStatus, parsePrUrl, type GitHubPRDetails } from '../api/github'
 import type { UpdateIntegrationStatus, ConversationMessage } from '../api/updates'
 
 interface IntegrationAgentPanelProps {
@@ -39,19 +40,12 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   cancelled: { icon: StopCircle, color: 'text-red-400', label: 'Cancelled' },
 }
 
-// Parse PR URL to extract owner, repo, and PR number
-function parsePrUrl(prUrl: string): { owner: string; repo: string; prNumber: number } | null {
-  const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
-  if (!match) return null
-  return { owner: match[1], repo: match[2], prNumber: parseInt(match[3], 10) }
-}
-
 export function IntegrationAgentPanel({
   updateId,
   integration,
 }: IntegrationAgentPanelProps) {
   const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState<ConversationMessage[]>(integration.conversation || [])
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null)
   const [showPlan, setShowPlan] = useState(false)
   const [branchCreated, setBranchCreated] = useState(false)
   const [lastCommitSha, setLastCommitSha] = useState<string | null>(null)
@@ -60,8 +54,13 @@ export function IntegrationAgentPanel({
   const [prDetails, setPrDetails] = useState<GitHubPRDetails | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const prevMessageCountRef = useRef(messages.length)
   const queryClient = useQueryClient()
+  
+  // Combine server conversation with pending message for display
+  const serverMessages = integration.conversation || []
+  const messages: ConversationMessage[] = pendingMessage
+    ? [...serverMessages, { id: 'pending', type: 'user_message', text: pendingMessage }]
+    : serverMessages
 
   // Extract the plan (first user message) and filter it from displayed messages
   const planMessage = messages.find((msg) => msg.type === 'user_message')
@@ -71,68 +70,77 @@ export function IntegrationAgentPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  // Only scroll when new messages are added
+  // Scroll when messages change
   useEffect(() => {
-    if (messages.length > prevMessageCountRef.current) {
-      scrollToBottom()
-    }
-    prevMessageCountRef.current = messages.length
-  }, [messages])
+    scrollToBottom()
+  }, [messages.length])
 
-  // Sync local state when parent data changes (e.g., after sync)
-  // The parent component syncs with the backend every 10s which already fetches conversation
-  // Backend now preserves locally-stored user messages, so we can trust server state
+  // Clear pending message once it appears in server data
   useEffect(() => {
-    if (integration.conversation && integration.conversation.length > 0) {
-      // If we're waiting for an update and new messages arrived, clear the waiting state
-      if (waitingForUpdate && integration.conversation.length > messages.length) {
+    if (pendingMessage && serverMessages.some(m => m.type === 'user_message' && m.text === pendingMessage)) {
+      setPendingMessage(null)
+    }
+    // Clear waiting state when new messages arrive
+    if (waitingForUpdate && serverMessages.length > 0) {
+      const lastMsg = serverMessages[serverMessages.length - 1]
+      if (lastMsg?.type === 'assistant_message') {
         setWaitingForUpdate(false)
         setLastCommitSha(null)
       }
-      setMessages(integration.conversation)
     }
-  }, [integration.conversation])
+  }, [serverMessages, pendingMessage, waitingForUpdate])
 
-  // Poll GitHub for branch creation (before branch exists)
+  // Poll PR status while PR is open (not merged/cancelled/skipped) to update backend cache
   useEffect(() => {
-    if (integration.status !== 'in_progress' || !integration.cursor_branch_name || branchCreated) return
+    // Skip polling if already merged (cached) or no PR URL
+    if (!integration.pr_url || integration.pr_merged) return
+    if (['cancelled', 'skipped', 'complete'].includes(integration.status)) return
 
-    const interval = setInterval(async () => {
+    const checkPRStatus = async () => {
       try {
-        const status = await checkBranchStatus(updateId, integration.integration_id)
-        if (status.branch_exists) {
-          setBranchCreated(true)
+        const status = await getIntegrationPRStatus(updateId, integration.integration_id)
+        // If merged, invalidate to refresh from backend (which now caches the status)
+        if (status.merged) {
           queryClient.invalidateQueries({ queryKey: ['updates'] })
         }
       } catch (e) {
-        console.error('Failed to check branch status:', e)
+        console.error('Failed to check PR status:', e)
       }
-    }, 15000)  // Poll GitHub every 15s
+    }
 
+    const interval = setInterval(checkPRStatus, 60000)
     return () => clearInterval(interval)
-  }, [updateId, integration.integration_id, integration.status, integration.cursor_branch_name, branchCreated, queryClient])
+  }, [updateId, integration.integration_id, integration.pr_url, integration.pr_merged, integration.status, queryClient])
 
-  // Poll for branch updates after sending a follow-up
+  // Poll branch for PR discovery (only when no PR yet)
   useEffect(() => {
-    if (!waitingForUpdate || !lastCommitSha) return
+    if (integration.pr_url || !integration.cursor_branch_name) return
+    if (['complete', 'cancelled', 'skipped'].includes(integration.status)) return
 
-    const interval = setInterval(async () => {
+    const checkBranch = async () => {
       try {
         const status = await checkBranchStatus(updateId, integration.integration_id)
-        if (status.last_commit_sha && status.last_commit_sha !== lastCommitSha) {
-          // New commit detected - agent has pushed changes
+        if (status.branch_exists && !branchCreated) {
+          setBranchCreated(true)
+        }
+        if (status.pr_url) {
+          queryClient.invalidateQueries({ queryKey: ['updates'] })
+        }
+        // Check for new commits when waiting for follow-up response
+        if (waitingForUpdate && lastCommitSha && status.last_commit_sha !== lastCommitSha) {
           setWaitingForUpdate(false)
           setLastCommitSha(null)
-          // Invalidate queries to trigger a sync which will fetch the updated conversation
           queryClient.invalidateQueries({ queryKey: ['updates'] })
         }
       } catch (e) {
-        console.error('Failed to check for updates:', e)
+        console.error('Failed to check branch:', e)
       }
-    }, 15000)
+    }
 
+    checkBranch()
+    const interval = setInterval(checkBranch, 60000)
     return () => clearInterval(interval)
-  }, [updateId, integration.integration_id, waitingForUpdate, lastCommitSha, queryClient])
+  }, [updateId, integration.integration_id, integration.pr_url, integration.cursor_branch_name, integration.status, branchCreated, waitingForUpdate, lastCommitSha, queryClient])
 
   // Fetch PR details when diff is toggled on
   useEffect(() => {
@@ -156,18 +164,16 @@ export function IntegrationAgentPanel({
   const followupMutation = useMutation({
     mutationFn: (text: string) => sendFollowup(updateId, integration.integration_id, text),
     onSuccess: async () => {
-      setMessages((prev) => [
-        ...prev,
-        { id: `user-${Date.now()}`, type: 'user_message', text: message },
-      ])
+      // Show pending message optimistically
+      setPendingMessage(message)
       setMessage('')
+      setWaitingForUpdate(true)
       
       // Get current commit SHA before agent makes changes
       try {
         const status = await checkBranchStatus(updateId, integration.integration_id)
         if (status.last_commit_sha) {
           setLastCommitSha(status.last_commit_sha)
-          setWaitingForUpdate(true)
         }
       } catch (e) {
         console.error('Failed to get commit SHA:', e)
@@ -203,9 +209,11 @@ export function IntegrationAgentPanel({
     }
   }
 
-  const StatusIcon = statusConfig[integration.status]?.icon || Loader2
-  const statusColor = statusConfig[integration.status]?.color || 'text-text-muted'
-  const statusLabel = statusConfig[integration.status]?.label || integration.status
+  // Show "Running" status when we've sent a follow-up and are waiting for the agent
+  const displayStatus = (followupMutation.isPending || waitingForUpdate) ? 'in_progress' : integration.status
+  const StatusIcon = statusConfig[displayStatus]?.icon || Loader2
+  const statusColor = statusConfig[displayStatus]?.color || 'text-text-muted'
+  const statusLabel = (followupMutation.isPending || waitingForUpdate) ? 'Running' : (statusConfig[integration.status]?.label || integration.status)
 
   // Construct GitHub branch URL from repo URL and branch name
   const getBranchUrl = () => {
@@ -221,7 +229,7 @@ export function IntegrationAgentPanel({
           <div className={`flex items-center gap-2 ${statusColor}`}>
             <StatusIcon
               size={16}
-              className={integration.status === 'in_progress' ? 'animate-spin' : ''}
+              className={displayStatus === 'in_progress' ? 'animate-spin' : ''}
             />
             <span className="text-sm font-medium">{statusLabel}</span>
           </div>
@@ -250,15 +258,35 @@ export function IntegrationAgentPanel({
             )}
             {integration.pr_url && (
               <>
-                <a
-                  href={integration.pr_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
-                >
-                  <GitPullRequest size={12} />
-                  View PR
-                </a>
+                {integration.pr_merged ? (
+                  <a
+                    href={integration.pr_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+                  >
+                    <GitMerge size={12} />
+                    Merged
+                    {integration.pr_merged_at && (
+                      <span className="text-purple-400/70 ml-1">
+                        {new Date(integration.pr_merged_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    )}
+                  </a>
+                ) : (
+                  <a
+                    href={integration.pr_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                  >
+                    <GitPullRequest size={12} />
+                    View PR
+                  </a>
+                )}
                 <button
                   onClick={() => setShowDiff(!showDiff)}
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-surface-hover text-text-secondary hover:bg-surface hover:text-text-primary transition-colors"

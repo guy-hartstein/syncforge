@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional, List
+from datetime import datetime
 import httpx
 
 from database import get_db
@@ -33,6 +34,8 @@ class GitHubPRDetails(BaseModel):
     body: Optional[str] = None
     html_url: str
     state: str
+    merged: bool = False
+    merged_at: Optional[str] = None
     user_login: str
     head_ref: str
     base_ref: str
@@ -40,6 +43,12 @@ class GitHubPRDetails(BaseModel):
     additions: int
     deletions: int
     changed_files: int
+
+
+class PRStatusResponse(BaseModel):
+    state: str  # open, closed
+    merged: bool
+    merged_at: Optional[str] = None
 
 router = APIRouter(prefix="/api/github", tags=["github"])
 
@@ -400,6 +409,8 @@ async def get_pull_request_details(
             body=pr_data.get("body"),
             html_url=pr_data["html_url"],
             state=pr_data["state"],
+            merged=pr_data.get("merged_at") is not None,
+            merged_at=pr_data.get("merged_at"),
             user_login=pr_data["user"]["login"],
             head_ref=pr_data["head"]["ref"],
             base_ref=pr_data["base"]["ref"],
@@ -410,11 +421,117 @@ async def get_pull_request_details(
         )
 
 
+@router.get("/repos/{owner}/{repo}/pulls/{pr_number}/status", response_model=PRStatusResponse)
+async def get_pr_status(
+    owner: str,
+    repo: str,
+    pr_number: int,
+    db: Session = Depends(get_db)
+):
+    """Get lightweight PR status (open/closed/merged)."""
+    token = get_github_token(db)
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub not connected")
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        if response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Pull request not found")
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch PR status")
+        
+        pr_data = response.json()
+        return PRStatusResponse(
+            state=pr_data["state"],
+            merged=pr_data.get("merged_at") is not None,
+            merged_at=pr_data.get("merged_at")
+        )
+
+
+@router.get("/integration/{update_id}/{integration_id}/pr-status", response_model=PRStatusResponse)
+async def get_integration_pr_status(
+    update_id: str,
+    integration_id: str,
+    db: Session = Depends(get_db)
+):
+    """Check PR status for an integration and update database if merged."""
+    token = get_github_token(db)
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub not connected")
+    
+    # Get the integration record
+    ui = db.query(UpdateIntegration).filter(
+        UpdateIntegration.update_id == update_id,
+        UpdateIntegration.integration_id == integration_id
+    ).first()
+    
+    if not ui or not ui.pr_url:
+        raise HTTPException(status_code=404, detail="Integration or PR not found")
+    
+    # Parse PR URL
+    import re
+    match = re.match(r'https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)', ui.pr_url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid PR URL format")
+    
+    owner, repo, pr_number = match.group(1), match.group(2), int(match.group(3))
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch PR status")
+        
+        pr_data = response.json()
+        merged = pr_data.get("merged_at") is not None
+        merged_at = pr_data.get("merged_at")
+        
+        # Update database if merged (cache the merged status)
+        if merged and not ui.pr_merged:
+            ui.pr_merged = True
+            ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
+            ui.status = UpdateIntegrationStatus.COMPLETE.value
+            db.commit()
+        
+        return PRStatusResponse(
+            state=pr_data["state"],
+            merged=merged,
+            merged_at=merged_at
+        )
+
+
 class BranchStatusResponse(BaseModel):
     branch_exists: bool
     pr_url: Optional[str] = None
     pr_number: Optional[int] = None
+    pr_state: Optional[str] = None  # open, closed, or merged
+    merged: bool = False
+    merged_at: Optional[str] = None
     last_commit_sha: Optional[str] = None
+
+
+def parse_pr_url(pr_url: str) -> tuple[str, str, int] | None:
+    """Extract owner, repo, and PR number from a GitHub PR URL."""
+    import re
+    match = re.match(r'https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)', pr_url)
+    if match:
+        return match.group(1), match.group(2), int(match.group(3))
+    return None
 
 
 @router.get("/check-branch/{update_id}/{integration_id}", response_model=BranchStatusResponse)
@@ -423,18 +540,18 @@ async def check_branch_status(
     integration_id: str,
     db: Session = Depends(get_db)
 ):
-    """Check if the branch exists on GitHub and if there's a PR for it."""
+    """Check branch and PR status. If we have a stored PR URL, check the PR directly."""
     token = get_github_token(db)
     if not token:
         raise HTTPException(status_code=401, detail="GitHub not connected")
     
-    # Get the update integration to find the branch name
+    # Get the update integration
     ui = db.query(UpdateIntegration).filter(
         UpdateIntegration.update_id == update_id,
         UpdateIntegration.integration_id == integration_id
     ).first()
     
-    if not ui or not ui.cursor_branch_name:
+    if not ui:
         return BranchStatusResponse(branch_exists=False)
     
     # Get the integration to find the GitHub repo
@@ -448,54 +565,113 @@ async def check_branch_status(
         raise HTTPException(status_code=400, detail="Invalid GitHub URL")
     
     owner, repo = parsed
-    branch_name = ui.cursor_branch_name
     
     async with httpx.AsyncClient() as client:
-        # Check if branch exists
-        branch_response = await client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/branches/{branch_name}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github.v3+json",
-            },
-            timeout=10.0
-        )
-        
-        branch_exists = branch_response.status_code == 200
-        
-        if not branch_exists:
-            return BranchStatusResponse(branch_exists=False)
-        
-        # Get the latest commit SHA from branch data
-        branch_data = branch_response.json()
-        last_commit_sha = branch_data.get("commit", {}).get("sha")
-        
-        # Branch exists - check for PRs from this branch
-        pr_response = await client.get(
-            f"https://api.github.com/repos/{owner}/{repo}/pulls",
-            params={"head": f"{owner}:{branch_name}", "state": "all"},
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github.v3+json",
-            },
-            timeout=10.0
-        )
-        
-        pr_url = None
+        pr_url = ui.pr_url
         pr_number = None
-        if pr_response.status_code == 200:
-            prs = pr_response.json()
-            if prs:
-                pr_url = prs[0]["html_url"]
-                pr_number = prs[0]["number"]
-                # Update the stored PR URL and set status to ready_to_merge
-                ui.pr_url = pr_url
-                ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
-                db.commit()
+        pr_state = None
+        merged = False
+        merged_at = None
+        branch_exists = False
+        last_commit_sha = None
+        
+        # If we already have a PR URL, check the PR directly (works even if branch is deleted)
+        # But skip if already cached as merged
+        if ui.pr_url and not ui.pr_merged:
+            pr_parsed = parse_pr_url(ui.pr_url)
+            if pr_parsed:
+                _, _, pr_number = pr_parsed
+                pr_response = await client.get(
+                    f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                    timeout=10.0
+                )
+                
+                if pr_response.status_code == 200:
+                    pr_data = pr_response.json()
+                    merged = pr_data.get("merged_at") is not None
+                    merged_at = pr_data.get("merged_at")
+                    pr_state = "merged" if merged else pr_data["state"]
+                    
+                    # Update status and cache merged state
+                    if merged:
+                        ui.pr_merged = True
+                        ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
+                        ui.status = UpdateIntegrationStatus.COMPLETE.value
+                    elif pr_state == "closed":
+                        # PR was closed without merging
+                        pass  # Keep current status
+                    else:
+                        ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
+                    db.commit()
+        elif ui.pr_merged:
+            # Use cached values
+            merged = True
+            merged_at = ui.pr_merged_at.isoformat() if ui.pr_merged_at else None
+            pr_state = "merged"
+            if ui.pr_url:
+                pr_parsed = parse_pr_url(ui.pr_url)
+                if pr_parsed:
+                    _, _, pr_number = pr_parsed
+        
+        # Check branch status (for commit SHA and to discover new PRs)
+        if ui.cursor_branch_name:
+            branch_response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/branches/{ui.cursor_branch_name}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github.v3+json",
+                },
+                timeout=10.0
+            )
+            
+            branch_exists = branch_response.status_code == 200
+            
+            if branch_exists:
+                branch_data = branch_response.json()
+                last_commit_sha = branch_data.get("commit", {}).get("sha")
+                
+                # If we don't have a PR yet, look for one
+                if not ui.pr_url:
+                    pr_search_response = await client.get(
+                        f"https://api.github.com/repos/{owner}/{repo}/pulls",
+                        params={"head": f"{owner}:{ui.cursor_branch_name}", "state": "all"},
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/vnd.github.v3+json",
+                        },
+                        timeout=10.0
+                    )
+                    
+                    if pr_search_response.status_code == 200:
+                        prs = pr_search_response.json()
+                        if prs:
+                            pr_data = prs[0]
+                            pr_url = pr_data["html_url"]
+                            pr_number = pr_data["number"]
+                            merged = pr_data.get("merged_at") is not None
+                            merged_at = pr_data.get("merged_at")
+                            pr_state = "merged" if merged else pr_data["state"]
+                            
+                            # Store the PR URL and cache merged state
+                            ui.pr_url = pr_url
+                            if merged:
+                                ui.pr_merged = True
+                                ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
+                                ui.status = UpdateIntegrationStatus.COMPLETE.value
+                            else:
+                                ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
+                            db.commit()
         
         return BranchStatusResponse(
-            branch_exists=True,
+            branch_exists=branch_exists,
             pr_url=pr_url,
             pr_number=pr_number,
+            pr_state=pr_state,
+            merged=merged,
+            merged_at=merged_at,
             last_commit_sha=last_commit_sha
         )

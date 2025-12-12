@@ -16,6 +16,8 @@ export interface UpdateIntegrationStatus {
   github_url?: string  // GitHub repo URL for branch link
   status: 'pending' | 'in_progress' | 'needs_review' | 'ready_to_merge' | 'skipped' | 'complete' | 'cancelled'
   pr_url?: string
+  pr_merged: boolean  // Cached merged status from backend
+  pr_merged_at?: string | null  // When the PR was merged
   agent_question?: string
   custom_instructions: string
   cursor_agent_id?: string

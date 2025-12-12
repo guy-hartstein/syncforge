@@ -32,6 +32,16 @@ def run_migrations():
         if "linear_api_key" not in columns:
             conn.execute(text("ALTER TABLE user_settings ADD COLUMN linear_api_key TEXT"))
             conn.commit()
+        
+        # Add pr_merged and pr_merged_at columns to update_integrations if they don't exist
+        result = conn.execute(text("PRAGMA table_info(update_integrations)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "pr_merged" not in columns:
+            conn.execute(text("ALTER TABLE update_integrations ADD COLUMN pr_merged BOOLEAN DEFAULT 0"))
+            conn.commit()
+        if "pr_merged_at" not in columns:
+            conn.execute(text("ALTER TABLE update_integrations ADD COLUMN pr_merged_at DATETIME"))
+            conn.commit()
 
 
 run_migrations()
