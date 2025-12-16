@@ -122,6 +122,7 @@ class UpdateIntegrationBase(BaseModel):
     pr_url: Optional[str] = None
     pr_merged: bool = False  # Cached merged status
     pr_merged_at: Optional[datetime] = None  # When the PR was merged
+    pr_closed: bool = False  # Cached closed (without merge) status
     agent_question: Optional[str] = None
     custom_instructions: str = ""
     cursor_agent_id: Optional[str] = None

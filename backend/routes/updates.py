@@ -32,6 +32,7 @@ def get_integration_statuses_with_names(db: Session, update: Update) -> List[Upd
             pr_url=ui.pr_url,
             pr_merged=ui.pr_merged or False,
             pr_merged_at=ui.pr_merged_at,
+            pr_closed=ui.pr_closed or False,
             agent_question=ui.agent_question,
             custom_instructions=ui.custom_instructions,
             cursor_agent_id=ui.cursor_agent_id,

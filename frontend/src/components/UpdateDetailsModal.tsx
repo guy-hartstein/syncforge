@@ -38,6 +38,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bgC
   ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Ready to Merge' },
   skipped: { icon: X, color: 'text-text-muted', bgColor: 'bg-surface-hover', label: 'Skipped' },
   complete: { icon: CheckCircle, color: 'text-purple-400', bgColor: 'bg-purple-400/10', label: 'Complete' },
+  cancelled: { icon: GitPullRequestClosed, color: 'text-red-400', bgColor: 'bg-red-400/10', label: 'Closed' },
 }
 
 export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedIntegration }: UpdateDetailsModalProps) {

@@ -39,7 +39,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', label: 'Ready to Merge' },
   skipped: { icon: StopCircle, color: 'text-text-muted', label: 'Skipped' },
   complete: { icon: CheckCircle, color: 'text-purple-400', label: 'Complete' },
-  cancelled: { icon: StopCircle, color: 'text-red-400', label: 'Cancelled' },
+  cancelled: { icon: GitPullRequestClosed, color: 'text-red-400', label: 'Closed' },
 }
 
 export function IntegrationAgentPanel({
@@ -238,7 +238,7 @@ export function IntegrationAgentPanel({
           <div className={`flex items-center gap-2 ${statusColor}`}>
             <StatusIcon
               size={16}
-              className={displayStatus === 'in_progress' ? 'animate-spin' : ''}
+              className={`${statusColor} ${displayStatus === 'in_progress' ? 'animate-spin' : ''}`}
             />
             <span className="text-sm font-medium">{statusLabel}</span>
           </div>

@@ -7,6 +7,7 @@ import {
   Check, 
   AlertCircle, 
   GitPullRequest,
+  GitPullRequestClosed,
   GitMerge,
   SkipForward,
   Clock,
@@ -65,10 +66,10 @@ const statusConfig: Record<UpdateIntegrationStatus['status'], {
     label: 'Complete'
   },
   cancelled: {
-    icon: <SkipForward size={12} />,
+    icon: <GitPullRequestClosed size={12} />,
     color: 'text-red-400',
     bgColor: 'bg-red-400/10',
-    label: 'Cancelled'
+    label: 'Closed'
   }
 }
 
