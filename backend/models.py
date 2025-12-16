@@ -15,6 +15,7 @@ class Integration(Base):
     github_links = Column(JSON, default=list)
     instructions = Column(Text, default="")
     memories = Column(JSON, default=list)  # List of {id, content, created_at}
+    auto_create_pr = Column(Boolean, default=False)  # Default auto-create PR setting for this integration
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

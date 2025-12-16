@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Bot, User } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { ChatMessage } from '../../api/wizard'
 
 interface ChatInterfaceProps {
@@ -58,7 +59,13 @@ export function ChatInterface({ messages, onSendMessage, isLoading }: ChatInterf
                     : 'bg-surface border border-border text-text-primary rounded-bl-md'
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                {message.role === 'assistant' ? (
+                  <div className="text-sm prose prose-sm prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:my-2 prose-code:bg-black/30 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-accent prose-code:before:content-none prose-code:after:content-none prose-pre:bg-black/30 prose-pre:rounded-lg">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                )}
               </div>
               {message.role === 'user' && (
                 <div className="w-8 h-8 rounded-lg bg-surface border border-border flex items-center justify-center flex-shrink-0">

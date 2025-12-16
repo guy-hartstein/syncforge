@@ -20,6 +20,7 @@ def create_integration(integration: IntegrationCreate, db: Session = Depends(get
         name=integration.name,
         github_links=integration.github_links,
         instructions=integration.instructions,
+        auto_create_pr=integration.auto_create_pr,
     )
     db.add(db_integration)
     db.commit()

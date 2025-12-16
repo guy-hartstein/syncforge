@@ -74,6 +74,7 @@ If the changes have NOT been made yet, proceed with the implementation:
 - Do NOT create extraneous examples, READMEs, documentation files, or test files unless explicitly requested
 - Do NOT refactor, reorganize, or "improve" code that is unrelated to the task
 - Do NOT add extra error handling, validation, or features beyond what was requested
+- Do NOT modify package-lock.json, pnpm-lock.yaml, or any other lock files — they add bloat to the PR
 - Aim for changes that fit seamlessly into the codebase as if a team member wrote them
 
 **CRITICAL: When you're done, you MUST push your changes to the following branch: `{branch_name}`**. Push to this exact branch name. Do not end the task until the branch has been pushed.

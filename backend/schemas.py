@@ -7,6 +7,7 @@ class IntegrationBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     github_links: List[str] = Field(default_factory=list)
     instructions: str = ""
+    auto_create_pr: bool = False
 
 
 class IntegrationCreate(IntegrationBase):
@@ -17,6 +18,7 @@ class IntegrationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     github_links: Optional[List[str]] = None
     instructions: Optional[str] = None
+    auto_create_pr: Optional[bool] = None
 
 
 # Memory Schemas

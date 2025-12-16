@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm, useFieldArray } from 'react-hook-form'
-import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2, Search, Lock, Globe, Settings, Brain } from 'lucide-react'
+import { X, Plus, Trash2, Github, Check, AlertCircle, Loader2, Search, Lock, Globe, Settings, Brain, GitPullRequest } from 'lucide-react'
 import type { Integration, IntegrationCreate, Memory } from '../types'
 import { checkGitHubRepo, getGitHubStatus, listGitHubRepos, type GitHubRepo, type GitHubStatus } from '../api/github'
 import { deleteMemory } from '../api/integrations'
@@ -20,6 +20,7 @@ interface FormData {
   name: string
   github_links: { value: string }[]
   instructions: string
+  auto_create_pr: boolean
 }
 
 type LinkStatus = 'idle' | 'checking' | 'public' | 'private' | 'invalid'
@@ -55,6 +56,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
       name: '',
       github_links: [{ value: '' }],
       instructions: '',
+      auto_create_pr: false,
     },
   })
 
@@ -183,6 +185,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
           ? editingIntegration.github_links.map(link => ({ value: link }))
           : [{ value: '' }],
         instructions: editingIntegration.instructions,
+        auto_create_pr: editingIntegration.auto_create_pr || false,
       })
       setMemories(editingIntegration.memories || [])
     } else {
@@ -190,6 +193,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
         name: '',
         github_links: [{ value: '' }],
         instructions: '',
+        auto_create_pr: false,
       })
       setMemories([])
     }
@@ -217,6 +221,7 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
       name: data.name,
       github_links: data.github_links.map(l => l.value).filter(v => v.trim() !== ''),
       instructions: data.instructions,
+      auto_create_pr: data.auto_create_pr,
     })
   }
 
@@ -434,6 +439,25 @@ export function AddIntegrationModal({ isOpen, onClose, onSubmit, editingIntegrat
                     rows={5}
                     className="textarea"
                   />
+                </div>
+
+                {/* Auto Create PR Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-surface-hover border border-border">
+                  <div className="flex items-center gap-2">
+                    <GitPullRequest size={16} className="text-text-muted" />
+                    <div>
+                      <span className="text-sm font-medium text-text-secondary">Auto Create PR</span>
+                      <p className="text-xs text-text-muted">Automatically create a pull request when the agent completes</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      {...register('auto_create_pr')}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-surface rounded-full peer peer-checked:bg-accent transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform peer-checked:after:translate-x-4"></div>
+                  </label>
                 </div>
 
                 {/* Memories Section - only show when editing and has memories */}
