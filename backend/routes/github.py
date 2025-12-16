@@ -500,16 +500,86 @@ async def get_integration_pr_status(
         pr_data = response.json()
         merged = pr_data.get("merged_at") is not None
         merged_at = pr_data.get("merged_at")
+        state = pr_data.get("state")
+        closed = state == "closed" and not merged
         
-        # Update database if merged (cache the merged status)
+        # Update database if merged or closed (cache the status)
         if merged and not ui.pr_merged:
             ui.pr_merged = True
             ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
             ui.status = UpdateIntegrationStatus.COMPLETE.value
             db.commit()
+        elif closed and not ui.pr_closed:
+            ui.pr_closed = True
+            ui.status = UpdateIntegrationStatus.CANCELLED.value
+            db.commit()
         
         return PRStatusResponse(
-            state=pr_data["state"],
+            state=state,
+            merged=merged,
+            merged_at=merged_at
+        )
+
+
+@router.post("/integration/{update_id}/{integration_id}/refresh-pr-status", response_model=PRStatusResponse)
+async def refresh_pr_status(
+    update_id: str,
+    integration_id: str,
+    db: Session = Depends(get_db)
+):
+    """Force refresh PR status from GitHub, bypassing the cache."""
+    token = get_github_token(db)
+    if not token:
+        raise HTTPException(status_code=401, detail="GitHub not connected")
+    
+    # Get the integration record
+    ui = db.query(UpdateIntegration).filter(
+        UpdateIntegration.update_id == update_id,
+        UpdateIntegration.integration_id == integration_id
+    ).first()
+    
+    if not ui or not ui.pr_url:
+        raise HTTPException(status_code=404, detail="Integration or PR not found")
+    
+    # Parse PR URL
+    import re
+    match = re.match(r'https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)', ui.pr_url)
+    if not match:
+        raise HTTPException(status_code=400, detail="Invalid PR URL format")
+    
+    owner, repo, pr_number = match.group(1), match.group(2), int(match.group(3))
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            timeout=10.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch PR status")
+        
+        pr_data = response.json()
+        merged = pr_data.get("merged_at") is not None
+        merged_at = pr_data.get("merged_at")
+        state = pr_data.get("state")
+        closed = state == "closed" and not merged
+        
+        # Always update database with fresh status
+        ui.pr_merged = merged
+        ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
+        ui.pr_closed = closed
+        if merged:
+            ui.status = UpdateIntegrationStatus.COMPLETE.value
+        elif closed:
+            ui.status = UpdateIntegrationStatus.CANCELLED.value
+        db.commit()
+        
+        return PRStatusResponse(
+            state=state,
             merged=merged,
             merged_at=merged_at
         )
@@ -594,24 +664,41 @@ async def check_branch_status(
                     pr_data = pr_response.json()
                     merged = pr_data.get("merged_at") is not None
                     merged_at = pr_data.get("merged_at")
-                    pr_state = "merged" if merged else pr_data["state"]
+                    state = pr_data.get("state")
+                    closed = state == "closed" and not merged
+                    pr_state = "merged" if merged else ("closed" if closed else state)
                     
-                    # Update status and cache merged state
+                    # Update status and cache merged/closed state
                     if merged:
                         ui.pr_merged = True
+                        ui.pr_closed = False
                         ui.pr_merged_at = datetime.fromisoformat(merged_at.replace("Z", "+00:00")) if merged_at else None
                         ui.status = UpdateIntegrationStatus.COMPLETE.value
-                    elif pr_state == "closed":
-                        # PR was closed without merging
-                        pass  # Keep current status
+                    elif closed:
+                        ui.pr_closed = True
+                        ui.pr_merged = False
+                        ui.status = UpdateIntegrationStatus.CANCELLED.value
                     else:
                         ui.status = UpdateIntegrationStatus.READY_TO_MERGE.value
                     db.commit()
+                elif pr_response.status_code == 404:
+                    # PR was deleted - mark as closed
+                    ui.pr_closed = True
+                    ui.status = UpdateIntegrationStatus.CANCELLED.value
+                    pr_state = "closed"
+                    db.commit()
         elif ui.pr_merged:
-            # Use cached values
+            # Use cached merged values
             merged = True
             merged_at = ui.pr_merged_at.isoformat() if ui.pr_merged_at else None
             pr_state = "merged"
+            if ui.pr_url:
+                pr_parsed = parse_pr_url(ui.pr_url)
+                if pr_parsed:
+                    _, _, pr_number = pr_parsed
+        elif ui.pr_closed:
+            # Use cached closed values
+            pr_state = "closed"
             if ui.pr_url:
                 pr_parsed = parse_pr_url(ui.pr_url)
                 if pr_parsed:

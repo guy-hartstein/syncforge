@@ -63,6 +63,7 @@ class UpdateIntegration(Base):
     pr_url = Column(String(500), nullable=True)
     pr_merged = Column(Boolean, default=False)  # Cached merged status
     pr_merged_at = Column(DateTime, nullable=True)  # When the PR was merged
+    pr_closed = Column(Boolean, default=False)  # Cached closed (without merge) status
     agent_question = Column(Text, nullable=True)
     custom_instructions = Column(Text, default="")
     cursor_agent_id = Column(String(50), nullable=True)  # Cursor agent ID (e.g., "bc_abc123")

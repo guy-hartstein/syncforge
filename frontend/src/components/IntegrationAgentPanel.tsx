@@ -4,6 +4,7 @@ import {
   Send,
   GitBranch,
   GitPullRequest,
+  GitPullRequestClosed,
   GitMerge,
   StopCircle,
   AlertCircle,
@@ -16,13 +17,14 @@ import {
   ChevronUp,
   Plus,
   Minus,
+  RefreshCw,
 } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { sendFollowup, stopAgent, updateIntegrationSettings } from '../api/agents'
-import { checkBranchStatus, getPullRequestDetails, getIntegrationPRStatus, parsePrUrl, type GitHubPRDetails } from '../api/github'
+import { checkBranchStatus, getPullRequestDetails, getIntegrationPRStatus, refreshPRStatus, parsePrUrl, type GitHubPRDetails } from '../api/github'
 import type { UpdateIntegrationStatus, ConversationMessage } from '../api/updates'
 
 interface IntegrationAgentPanelProps {
@@ -36,7 +38,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; lab
   needs_review: { icon: AlertCircle, color: 'text-amber-400', label: 'Needs Review' },
   ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', label: 'Ready to Merge' },
   skipped: { icon: StopCircle, color: 'text-text-muted', label: 'Skipped' },
-  complete: { icon: CheckCircle, color: 'text-green-400', label: 'Complete' },
+  complete: { icon: CheckCircle, color: 'text-purple-400', label: 'Complete' },
   cancelled: { icon: StopCircle, color: 'text-red-400', label: 'Cancelled' },
 }
 
@@ -197,6 +199,13 @@ export function IntegrationAgentPanel({
     },
   })
 
+  const refreshPrMutation = useMutation({
+    mutationFn: () => refreshPRStatus(updateId, integration.integration_id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['updates'] })
+    },
+  })
+
   const handleSend = () => {
     if (!message.trim()) return
     followupMutation.mutate(message.trim())
@@ -266,26 +275,38 @@ export function IntegrationAgentPanel({
                     className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
                   >
                     <GitMerge size={12} />
-                    Merged
-                    {integration.pr_merged_at && (
-                      <span className="text-purple-400/70 ml-1">
-                        {new Date(integration.pr_merged_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    )}
+                    View Merged PR
                   </a>
-                ) : (
+                ) : integration.pr_closed ? (
                   <a
                     href={integration.pr_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors"
                   >
-                    <GitPullRequest size={12} />
-                    View PR
+                    <GitPullRequestClosed size={12} />
+                    View Closed PR
                   </a>
+                ) : (
+                  <>
+                    <a
+                      href={integration.pr_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                    >
+                      <GitPullRequest size={12} />
+                      View PR
+                    </a>
+                    <button
+                      onClick={() => refreshPrMutation.mutate()}
+                      disabled={refreshPrMutation.isPending}
+                      className="p-1.5 rounded-lg bg-surface-hover text-text-secondary hover:bg-surface hover:text-text-primary transition-colors disabled:opacity-50"
+                      title="Refresh PR status"
+                    >
+                      <RefreshCw size={12} className={refreshPrMutation.isPending ? 'animate-spin' : ''} />
+                    </button>
+                  </>
                 )}
                 <button
                   onClick={() => setShowDiff(!showDiff)}

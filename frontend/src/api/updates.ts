@@ -18,6 +18,7 @@ export interface UpdateIntegrationStatus {
   pr_url?: string
   pr_merged: boolean  // Cached merged status from backend
   pr_merged_at?: string | null  // When the PR was merged
+  pr_closed: boolean  // Cached closed (without merge) status
   agent_question?: string
   custom_instructions: string
   cursor_agent_id?: string

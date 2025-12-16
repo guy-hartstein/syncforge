@@ -6,6 +6,8 @@ import {
   RefreshCw,
   GitBranch,
   GitPullRequest,
+  GitPullRequestClosed,
+  GitMerge,
   AlertCircle,
   CheckCircle,
   Loader2,
@@ -35,7 +37,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bgC
   needs_review: { icon: AlertCircle, color: 'text-amber-400', bgColor: 'bg-amber-400/10', label: 'Needs Review' },
   ready_to_merge: { icon: GitPullRequest, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Ready to Merge' },
   skipped: { icon: X, color: 'text-text-muted', bgColor: 'bg-surface-hover', label: 'Skipped' },
-  complete: { icon: CheckCircle, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Complete' },
+  complete: { icon: CheckCircle, color: 'text-purple-400', bgColor: 'bg-purple-400/10', label: 'Complete' },
 }
 
 export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedIntegration }: UpdateDetailsModalProps) {
@@ -349,10 +351,26 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
                                 href={selectedIntegrationData.pr_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-colors"
+                                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${
+                                  selectedIntegrationData.pr_merged
+                                    ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
+                                    : selectedIntegrationData.pr_closed
+                                    ? 'bg-red-400/10 text-red-400 hover:bg-red-400/20'
+                                    : 'bg-green-400/10 text-green-400 hover:bg-green-400/20'
+                                }`}
                               >
-                                <GitPullRequest size={14} />
-                                View PR
+                                {selectedIntegrationData.pr_merged ? (
+                                  <GitMerge size={14} />
+                                ) : selectedIntegrationData.pr_closed ? (
+                                  <GitPullRequestClosed size={14} />
+                                ) : (
+                                  <GitPullRequest size={14} />
+                                )}
+                                {selectedIntegrationData.pr_merged
+                                  ? 'View Merged PR'
+                                  : selectedIntegrationData.pr_closed
+                                  ? 'View Closed PR'
+                                  : 'View PR'}
                               </a>
                             )}
                             {selectedIntegrationData.cursor_agent_id && !selectedIntegrationData.pr_url && (
@@ -373,6 +391,7 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
                       {/* Integration Agent Panel */}
                       <div className="flex-1 overflow-y-auto">
                         <IntegrationAgentPanel
+                          key={selectedIntegrationData.integration_id}
                           updateId={update.id}
                           integration={selectedIntegrationData}
                         />

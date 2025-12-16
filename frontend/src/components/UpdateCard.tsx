@@ -60,8 +60,8 @@ const statusConfig: Record<UpdateIntegrationStatus['status'], {
   },
   complete: {
     icon: <Check size={12} />,
-    color: 'text-green-400',
-    bgColor: 'bg-green-400/10',
+    color: 'text-purple-400',
+    bgColor: 'bg-purple-400/10',
     label: 'Complete'
   },
   cancelled: {

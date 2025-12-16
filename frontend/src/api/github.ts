@@ -168,6 +168,16 @@ export async function getIntegrationPRStatus(updateId: string, integrationId: st
   return response.json()
 }
 
+export async function refreshPRStatus(updateId: string, integrationId: string): Promise<PRStatusResponse> {
+  const response = await fetch(`${API_BASE}/integration/${updateId}/${integrationId}/refresh-pr-status`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to refresh PR status')
+  }
+  return response.json()
+}
+
 export async function getPullRequestDetails(
   owner: string,
   repo: string,
