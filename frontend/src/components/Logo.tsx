@@ -6,11 +6,11 @@ interface LogoProps {
 export function Logo({ className = '', size = 40 }: LogoProps) {
   return (
     <img 
-      src="/logo.png" 
+      src="/syncforge.jpg" 
       alt="SyncForge" 
       width={size} 
       height={size}
-      className={className}
+      className={`rounded-lg ${className}`}
     />
   )
 }

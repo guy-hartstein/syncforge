@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Plus, Layers, Rocket, RefreshCw, Settings } from 'lucide-react'
-import { Logo } from './Logo'
 import { IntegrationCard } from './IntegrationCard'
 import { AddIntegrationModal } from './AddIntegrationModal'
 import { UpdateWizard } from './UpdateWizard'
@@ -130,12 +129,9 @@ export function OnboardingPage() {
       {/* Subtle gradient background */}
       <div className="fixed inset-0 bg-gradient-to-br from-accent/5 via-transparent to-transparent pointer-events-none" />
       
-      {/* Logo in top right */}
-      <div className="fixed top-6 right-6 pointer-events-none opacity-20">
-        <Logo size={120} />
-      </div>
       
-      <div className="relative max-w-5xl mx-auto px-6 py-12">
+      
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
@@ -277,6 +273,19 @@ export function OnboardingPage() {
       />
 
       <Walkthrough />
+
+      {/* Bottom feathered image - scroll to see */}
+      <div className="relative -mt-80 z-0 pointer-events-none">
+        <img 
+          src="/syncforge.jpg" 
+          alt="" 
+          className="w-full h-auto"
+          style={{
+            maskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.1) 10%, rgba(0,0,0,0.25) 20%, rgba(0,0,0,0.45) 30%, rgba(0,0,0,0.65) 40%, rgba(0,0,0,0.85) 50%, black 60%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.1) 10%, rgba(0,0,0,0.25) 20%, rgba(0,0,0,0.45) 30%, rgba(0,0,0,0.65) 40%, rgba(0,0,0,0.85) 50%, black 60%)',
+          }}
+        />
+      </div>
     </div>
   )
 }
