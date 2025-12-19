@@ -78,6 +78,18 @@ export async function syncAgents(updateId: string): Promise<void> {
   if (!response.ok) throw new Error('Failed to sync agents')
 }
 
+export async function refreshConversation(
+  updateId: string,
+  integrationId: string
+): Promise<AgentConversation> {
+  const response = await fetch(
+    `${API_BASE}/${updateId}/integrations/${integrationId}/conversation/refresh`,
+    { method: 'POST' }
+  )
+  if (!response.ok) throw new Error('Failed to refresh conversation')
+  return response.json()
+}
+
 export async function updateIntegrationSettings(
   updateId: string,
   integrationId: string,

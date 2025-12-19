@@ -130,7 +130,9 @@ The user has specified the following preferences for this integration. You MUST 
         update_integration: UpdateIntegration,
         integration: Integration,
         auto_create_pr: bool = False,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        webhook_url: Optional[str] = None,
+        webhook_secret: Optional[str] = None
     ) -> tuple[str, str]:
         """
         Start a Cursor agent for a specific integration.
@@ -141,6 +143,8 @@ The user has specified the following preferences for this integration. You MUST 
             integration: The integration to update
             auto_create_pr: Whether to auto-create PR when done
             model: Optional model to use for the agent
+            webhook_url: Optional URL for status change webhooks
+            webhook_secret: Optional secret for webhook verification
         
         Returns:
             Tuple of (agent_id, branch_name)
@@ -169,7 +173,9 @@ The user has specified the following preferences for this integration. You MUST 
                 prompt=prompt,
                 auto_create_pr=auto_create_pr,
                 branch_name=branch_name,
-                model=model
+                model=model,
+                webhook_url=webhook_url,
+                webhook_secret=webhook_secret
             )
         
         return agent_id, branch_name
@@ -196,6 +202,11 @@ The user has specified the following preferences for this integration. You MUST 
         update = db.query(Update).filter(Update.id == update_id).first()
         if not update:
             raise ValueError(f"Update not found: {update_id}")
+        
+        # Get webhook configuration from settings
+        settings = db.query(UserSettings).first()
+        webhook_url = settings.cursor_webhook_url if settings else None
+        webhook_secret = settings.cursor_webhook_secret if settings else None
         
         agent_ids = []
         
@@ -225,7 +236,9 @@ The user has specified the following preferences for this integration. You MUST 
                     update_integration=ui,
                     integration=integration,
                     auto_create_pr=should_auto_pr,
-                    model=model
+                    model=model,
+                    webhook_url=webhook_url,
+                    webhook_secret=webhook_secret
                 )
                 
                 ui.cursor_agent_id = agent_id
@@ -246,7 +259,8 @@ The user has specified the following preferences for this integration. You MUST 
         self,
         update_integration_id: str,
         api_key: str,
-        db: Session
+        db: Session,
+        include_conversation: bool = False
     ) -> Optional[dict]:
         """
         Sync the status of a single agent from Cursor API and check PR merge status.
@@ -255,6 +269,7 @@ The user has specified the following preferences for this integration. You MUST 
             update_integration_id: The UpdateIntegration ID
             api_key: Cursor API key
             db: Database session
+            include_conversation: Whether to also fetch conversation (default False for lightweight sync)
         
         Returns:
             Updated status info or None
@@ -269,7 +284,11 @@ The user has specified the following preferences for this integration. You MUST 
         try:
             async with CursorClient(api_key) as client:
                 agent_info = await client.get_agent_status(ui.cursor_agent_id)
-                conversation = await client.get_conversation(ui.cursor_agent_id)
+                
+                # Only fetch conversation if explicitly requested (reduces API calls)
+                conversation = None
+                if include_conversation:
+                    conversation = await client.get_conversation(ui.cursor_agent_id)
             
             # Update branch and PR info
             if agent_info.branch_name and not ui.cursor_branch_name:
@@ -277,12 +296,13 @@ The user has specified the following preferences for this integration. You MUST 
             if agent_info.pr_url:
                 ui.pr_url = agent_info.pr_url
             
-            # Store conversation from Cursor (source of truth)
-            ui.conversation = [
-                {"id": msg.id, "type": msg.type, "text": msg.text}
-                for msg in conversation
-            ]
-            flag_modified(ui, "conversation")
+            # Only update conversation if we fetched it
+            if conversation is not None:
+                ui.conversation = [
+                    {"id": msg.id, "type": msg.type, "text": msg.text}
+                    for msg in conversation
+                ]
+                flag_modified(ui, "conversation")
             
             # Check PR merge status if we have a PR and it's not already cached as merged
             if ui.pr_url and not ui.pr_merged:
@@ -313,7 +333,7 @@ The user has specified the following preferences for this integration. You MUST 
             
             # Check for questions in conversation (last assistant message ends with ?)
             has_pending_question = False
-            if conversation:
+            if conversation is not None:
                 last_assistant = None
                 for msg in reversed(conversation):
                     if msg.type == "assistant_message":

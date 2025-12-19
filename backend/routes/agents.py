@@ -74,7 +74,41 @@ async def get_conversation(
     db: Session = Depends(get_db)
 ):
     """
-    Get the conversation history for an integration's agent.
+    Get the cached conversation history for an integration's agent.
+    Uses cached data to reduce API calls. Use POST .../conversation/refresh for fresh data.
+    """
+    ui = db.query(UpdateIntegration).filter(
+        UpdateIntegration.update_id == update_id,
+        UpdateIntegration.integration_id == integration_id
+    ).first()
+    
+    if not ui:
+        raise HTTPException(status_code=404, detail="Update integration not found")
+    
+    # Return cached conversation (no API call)
+    cached_messages = [
+        AgentConversationMessage(**msg)
+        for msg in (ui.conversation or [])
+    ]
+    
+    return AgentConversationResponse(
+        messages=cached_messages,
+        status=ui.status,
+        agent_id=ui.cursor_agent_id,
+        branch_name=ui.cursor_branch_name,
+        pr_url=ui.pr_url
+    )
+
+
+@router.post("/{update_id}/integrations/{integration_id}/conversation/refresh", response_model=AgentConversationResponse)
+async def refresh_conversation(
+    update_id: str,
+    integration_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch fresh conversation from Cursor API and update cache.
+    Use this when user explicitly wants to see latest conversation.
     """
     api_key = get_api_key(db)
     
@@ -86,7 +120,6 @@ async def get_conversation(
     if not ui:
         raise HTTPException(status_code=404, detail="Update integration not found")
     
-    # Return cached conversation if no agent
     if not ui.cursor_agent_id:
         return AgentConversationResponse(
             messages=[],
@@ -102,6 +135,22 @@ async def get_conversation(
             conversation = await client.get_conversation(ui.cursor_agent_id)
             agent_info = await client.get_agent_status(ui.cursor_agent_id)
         
+        # Update cache
+        from sqlalchemy.orm.attributes import flag_modified
+        ui.conversation = [
+            {"id": msg.id, "type": msg.type, "text": msg.text}
+            for msg in conversation
+        ]
+        flag_modified(ui, "conversation")
+        
+        # Update status info as well
+        if agent_info.branch_name:
+            ui.cursor_branch_name = agent_info.branch_name
+        if agent_info.pr_url:
+            ui.pr_url = agent_info.pr_url
+        
+        db.commit()
+        
         messages = [
             AgentConversationMessage(
                 id=msg.id,
@@ -115,11 +164,12 @@ async def get_conversation(
             messages=messages,
             status=ui.status,
             agent_id=ui.cursor_agent_id,
-            branch_name=agent_info.branch_name,
-            pr_url=agent_info.pr_url
+            branch_name=agent_info.branch_name or ui.cursor_branch_name,
+            pr_url=agent_info.pr_url or ui.pr_url
         )
         
     except CursorClientError as e:
+        logger.error(f"Failed to refresh conversation: {e}")
         # Return cached data on error
         cached_messages = [
             AgentConversationMessage(**msg)

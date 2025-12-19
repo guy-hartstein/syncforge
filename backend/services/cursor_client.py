@@ -107,7 +107,9 @@ class CursorClient:
         ref: Optional[str] = None,
         auto_create_pr: bool = False,
         branch_name: Optional[str] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        webhook_url: Optional[str] = None,
+        webhook_secret: Optional[str] = None
     ) -> str:
         """
         Launch a new cloud agent to work on a repository.
@@ -119,6 +121,8 @@ class CursorClient:
             auto_create_pr: Whether to automatically create a PR when done
             branch_name: Custom branch name for the agent to use
             model: Optional model name (defaults to auto-selection)
+            webhook_url: Optional URL to receive status change webhooks
+            webhook_secret: Optional secret for webhook signature verification
         
         Returns:
             The agent ID (e.g., "bc_abc123")
@@ -149,6 +153,13 @@ class CursorClient:
             
             if model:
                 payload["model"] = model
+            
+            # Add webhook configuration if both URL and secret are provided
+            if webhook_url and webhook_secret:
+                payload["webhook"] = {
+                    "url": webhook_url,
+                    "secret": webhook_secret
+                }
             
             response = await self._client.post("/v0/agents", json=payload)
             

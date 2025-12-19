@@ -205,11 +205,25 @@ def update_integration_status(
     if not update_integration:
         raise HTTPException(status_code=404, detail="Update integration not found")
     
-    update_integration.status = status_update.status
+    # Update fields if provided
+    if status_update.status is not None:
+        update_integration.status = status_update.status
     if status_update.pr_url is not None:
-        update_integration.pr_url = status_update.pr_url
+        update_integration.pr_url = status_update.pr_url if status_update.pr_url else None
     if status_update.agent_question is not None:
         update_integration.agent_question = status_update.agent_question
+    if status_update.cursor_branch_name is not None:
+        update_integration.cursor_branch_name = status_update.cursor_branch_name if status_update.cursor_branch_name else None
+    if status_update.pr_merged is not None:
+        update_integration.pr_merged = status_update.pr_merged
+        if status_update.pr_merged:
+            update_integration.status = "complete"
+            from datetime import datetime
+            update_integration.pr_merged_at = datetime.utcnow()
+    if status_update.pr_closed is not None:
+        update_integration.pr_closed = status_update.pr_closed
+        if status_update.pr_closed and not update_integration.pr_merged:
+            update_integration.status = "cancelled"
     
     # Check if all integrations are complete to update overall status
     update = db.query(Update).filter(Update.id == update_id).first()

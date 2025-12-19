@@ -12,6 +12,7 @@ from routes.update_wizard import router as wizard_router
 from routes.updates import router as updates_router
 from routes.agents import router as agents_router
 from routes.settings import router as settings_router
+from routes.webhooks import router as webhooks_router
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +43,16 @@ def run_migrations():
         if "pr_merged_at" not in columns:
             conn.execute(text("ALTER TABLE update_integrations ADD COLUMN pr_merged_at DATETIME"))
             conn.commit()
+        
+        # Add webhook columns to user_settings if they don't exist
+        result = conn.execute(text("PRAGMA table_info(user_settings)"))
+        columns = [row[1] for row in result.fetchall()]
+        if "cursor_webhook_secret" not in columns:
+            conn.execute(text("ALTER TABLE user_settings ADD COLUMN cursor_webhook_secret VARCHAR(64)"))
+            conn.commit()
+        if "cursor_webhook_url" not in columns:
+            conn.execute(text("ALTER TABLE user_settings ADD COLUMN cursor_webhook_url VARCHAR(500)"))
+            conn.commit()
 
 
 run_migrations()
@@ -68,6 +79,7 @@ app.include_router(wizard_router)
 app.include_router(updates_router)
 app.include_router(agents_router)
 app.include_router(settings_router)
+app.include_router(webhooks_router)
 
 
 @app.get("/health")

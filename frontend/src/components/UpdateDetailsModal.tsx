@@ -83,10 +83,14 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
     }
   }, [isOpen, initialExpandedIntegration, update.integration_statuses])
 
-  // Auto-refresh when agents are running
+  // Auto-refresh when agents are running (reduced from 10s to 30s since we have webhooks)
+  // Webhooks handle FINISHED/ERROR state changes instantly, so we only poll for
+  // conversation updates and intermediate RUNNING state changes
   useEffect(() => {
     if (!isOpen) return
 
+    // Only poll if there are agents that are still running
+    // Finished/error states are handled by webhooks
     const hasRunningAgents = update.integration_statuses.some(
       (s) => s.status === 'in_progress' && s.cursor_agent_id
     )
@@ -94,7 +98,7 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
     if (hasRunningAgents) {
       const interval = setInterval(() => {
         syncMutation.mutate()
-      }, 10000)
+      }, 30000) // Increased from 10s to 30s
 
       return () => clearInterval(interval)
     }
@@ -374,15 +378,15 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
                                   : 'View PR'}
                               </a>
                             )}
-                            {selectedIntegrationData.cursor_agent_id && !selectedIntegrationData.pr_url && (
+                            {selectedIntegrationData.cursor_branch_name && selectedIntegrationData.github_url && !selectedIntegrationData.pr_url && (
                               <a
-                                href={`https://cursor.com/agents?selectedBcId=${selectedIntegrationData.cursor_agent_id}`}
+                                href={`${selectedIntegrationData.github_url}/tree/${selectedIntegrationData.cursor_branch_name}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
                               >
                                 <GitBranch size={14} />
-                                {selectedIntegrationData.cursor_branch_name || 'View Agent'}
+                                {selectedIntegrationData.cursor_branch_name}
                               </a>
                             )}
                           </div>

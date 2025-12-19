@@ -84,6 +84,8 @@ class UserSettings(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     cursor_api_key = Column(Text, nullable=True)  # Encrypted Cursor API key
+    cursor_webhook_secret = Column(String(64), nullable=True)  # Secret for verifying Cursor webhooks
+    cursor_webhook_url = Column(String(500), nullable=True)  # Public URL for Cursor to send webhooks
     github_pat = Column(Text, nullable=True)  # GitHub Personal Access Token
     github_username = Column(String(255), nullable=True)  # GitHub username
     linear_api_key = Column(Text, nullable=True)  # Linear API key

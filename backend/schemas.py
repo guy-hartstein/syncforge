@@ -146,9 +146,12 @@ class UpdateIntegrationResponse(UpdateIntegrationBase):
 
 
 class UpdateIntegrationStatusUpdate(BaseModel):
-    status: str
+    status: Optional[str] = None
     pr_url: Optional[str] = None
     agent_question: Optional[str] = None
+    cursor_branch_name: Optional[str] = None
+    pr_merged: Optional[bool] = None
+    pr_closed: Optional[bool] = None
 
 
 class UpdateCreate(BaseModel):
@@ -231,8 +234,11 @@ class UserSettingsCreate(UserSettingsBase):
     pass
 
 
-class UserSettingsUpdate(UserSettingsBase):
-    pass
+class UserSettingsUpdate(BaseModel):
+    cursor_api_key: Optional[str] = None
+    preferred_model: Optional[str] = None
+    cursor_webhook_secret: Optional[str] = None
+    cursor_webhook_url: Optional[str] = None
 
 
 class UserSettingsResponse(BaseModel):
@@ -242,6 +248,8 @@ class UserSettingsResponse(BaseModel):
     github_username: Optional[str] = None  # GitHub username if connected
     linear_connected: bool = False  # Whether Linear API key is configured
     preferred_model: Optional[str] = None  # Preferred model for agents
+    cursor_webhook_secret: Optional[str] = None  # Webhook secret (shown to user for setup)
+    cursor_webhook_url: Optional[str] = None  # Public webhook URL
     created_at: datetime
     updated_at: datetime
 

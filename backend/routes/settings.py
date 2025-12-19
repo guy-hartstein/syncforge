@@ -2,6 +2,7 @@
 User Settings API Endpoints
 """
 
+import secrets
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -39,6 +40,8 @@ def get_settings(db: Session = Depends(get_db)):
         github_username=settings.github_username,
         linear_connected=bool(settings.linear_api_key),
         preferred_model=settings.preferred_model,
+        cursor_webhook_secret=settings.cursor_webhook_secret,
+        cursor_webhook_url=settings.cursor_webhook_url,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )
@@ -59,6 +62,12 @@ def update_settings(
     if settings_update.preferred_model is not None:
         settings.preferred_model = settings_update.preferred_model
     
+    if settings_update.cursor_webhook_secret is not None:
+        settings.cursor_webhook_secret = settings_update.cursor_webhook_secret
+    
+    if settings_update.cursor_webhook_url is not None:
+        settings.cursor_webhook_url = settings_update.cursor_webhook_url
+    
     db.commit()
     db.refresh(settings)
     
@@ -69,6 +78,8 @@ def update_settings(
         github_username=settings.github_username,
         linear_connected=bool(settings.linear_api_key),
         preferred_model=settings.preferred_model,
+        cursor_webhook_secret=settings.cursor_webhook_secret,
+        cursor_webhook_url=settings.cursor_webhook_url,
         created_at=settings.created_at,
         updated_at=settings.updated_at
     )
@@ -132,4 +143,19 @@ async def list_models(db: Session = Depends(get_db)):
         return {"models": models}
     except CursorClientError as e:
         return {"models": [], "error": str(e)}
+
+
+@router.post("/generate-webhook-secret")
+def generate_webhook_secret(db: Session = Depends(get_db)):
+    """Generate a new webhook secret for Cursor webhooks."""
+    settings = get_or_create_settings(db)
+    
+    # Generate a secure random secret (32 bytes = 64 hex chars)
+    new_secret = secrets.token_hex(32)
+    settings.cursor_webhook_secret = new_secret
+    
+    db.commit()
+    db.refresh(settings)
+    
+    return {"secret": new_secret}
 

@@ -7,6 +7,8 @@ export interface UserSettings {
   github_username: string | null
   linear_connected: boolean
   preferred_model: string | null
+  cursor_webhook_secret: string | null
+  cursor_webhook_url: string | null
   created_at: string
   updated_at: string
 }
@@ -25,6 +27,8 @@ export interface ModelsResponse {
 export interface UpdateSettingsPayload {
   cursor_api_key?: string
   preferred_model?: string
+  cursor_webhook_secret?: string
+  cursor_webhook_url?: string
 }
 
 export async function fetchSettings(): Promise<UserSettings> {
@@ -62,5 +66,13 @@ export async function deleteCursorApiKey(): Promise<void> {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error('Failed to delete API key')
+}
+
+export async function generateWebhookSecret(): Promise<{ secret: string }> {
+  const response = await fetch(`${API_BASE}/generate-webhook-secret`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error('Failed to generate webhook secret')
+  return response.json()
 }
 

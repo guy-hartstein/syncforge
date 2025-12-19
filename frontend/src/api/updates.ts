@@ -76,6 +76,15 @@ export async function getUpdate(id: string): Promise<Update> {
   return response.json()
 }
 
+export interface UpdateIntegrationPayload {
+  status?: string
+  pr_url?: string | null
+  agent_question?: string
+  cursor_branch_name?: string | null
+  pr_merged?: boolean
+  pr_closed?: boolean
+}
+
 export async function updateIntegrationStatus(
   updateId: string,
   integrationId: string,
@@ -93,6 +102,19 @@ export async function updateIntegrationStatus(
     }),
   })
   if (!response.ok) throw new Error('Failed to update integration status')
+}
+
+export async function updateIntegration(
+  updateId: string,
+  integrationId: string,
+  payload: UpdateIntegrationPayload
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/${updateId}/integrations/${integrationId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) throw new Error('Failed to update integration')
 }
 
 export async function deleteUpdate(id: string): Promise<void> {
