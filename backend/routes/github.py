@@ -610,7 +610,11 @@ async def check_branch_status(
     integration_id: str,
     db: Session = Depends(get_db)
 ):
-    """Check branch and PR status. If we have a stored PR URL, check the PR directly."""
+    """Check branch and PR status. If we have a stored PR URL, check the PR directly.
+    
+    Note: This endpoint is a backup mechanism for status discovery. The primary 
+    status updates come from Cursor webhooks, which update the status directly.
+    """
     token = get_github_token(db)
     if not token:
         raise HTTPException(status_code=401, detail="GitHub not connected")
@@ -623,6 +627,16 @@ async def check_branch_status(
     
     if not ui:
         return BranchStatusResponse(branch_exists=False)
+    
+    # For terminal states, just return cached info without API calls
+    if ui.status in [UpdateIntegrationStatus.COMPLETE.value, UpdateIntegrationStatus.CANCELLED.value, UpdateIntegrationStatus.SKIPPED.value]:
+        return BranchStatusResponse(
+            branch_exists=bool(ui.cursor_branch_name),
+            pr_url=ui.pr_url,
+            pr_state="merged" if ui.pr_merged else ("closed" if ui.pr_closed else None),
+            merged=ui.pr_merged or False,
+            merged_at=ui.pr_merged_at.isoformat() if ui.pr_merged_at else None
+        )
     
     # Get the integration to find the GitHub repo
     integration = db.query(Integration).filter(Integration.id == integration_id).first()

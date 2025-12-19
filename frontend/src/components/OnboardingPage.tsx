@@ -30,11 +30,16 @@ export function OnboardingPage() {
   const { data: updates = [], isLoading: updatesLoading } = useQuery({
     queryKey: ['updates'],
     queryFn: fetchUpdates,
-    // Poll every 2 seconds while any update is still creating
+    // Poll every 2 seconds while creating, every 5 seconds while agents are in progress
     refetchInterval: (query) => {
       const data = query.state.data
       if (data?.some(u => u.status === 'creating')) {
         return 2000
+      }
+      // Poll every 5 seconds if any integration is in_progress (waiting for webhook updates)
+      // Exclude 'creating' updates - they shouldn't be polled for integration status
+      if (data?.some(u => u.status !== 'creating' && u.integration_statuses?.some(i => i.status === 'in_progress'))) {
+        return 5000
       }
       return false
     },

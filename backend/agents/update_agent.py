@@ -14,6 +14,12 @@ class MemoryExtraction(BaseModel):
     memory: str = Field(default="", description="The extracted memory, or empty string if none")
 
 
+class TitleAndGuide(BaseModel):
+    """Structured output for combined title and implementation guide generation."""
+    title: str = Field(description="A short title (3-10 words) summarizing the update")
+    implementation_guide: str = Field(description="A detailed markdown implementation guide")
+
+
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     clarification_count: int
@@ -125,35 +131,24 @@ class UpdateAgent:
             "ready_to_proceed": result["ready_to_proceed"]
         }
     
-    def generate_title(self, conversation: list[dict]) -> str:
-        """Generate a short title (3-5 words) from the conversation."""
-        if not self.llm:
-            # Fallback title
-            from datetime import datetime
-            return f"Update - {datetime.now().strftime('%b %d')}"
+    def generate_title_and_guide(self, conversation: list[dict], attachments: list[dict]) -> tuple[str, str]:
+        """Generate both title and implementation guide in a single LLM call."""
+        from datetime import datetime
         
         conversation_text = "\n".join([
-            f"{msg['role']}: {msg['content']}" 
+            f"{msg['role'].upper()}: {msg['content']}" 
             for msg in conversation
         ])
         
-        messages = [
-            SystemMessage(content="Generate a very short title (3-10 words max) that summarizes this integration update. Return ONLY the title, nothing else."),
-            HumanMessage(content=conversation_text)
-        ]
+        attachments_text = "\n".join([
+            f"- {a.get('name', 'Attachment')}: {a.get('url', a.get('file_path', 'N/A'))}"
+            for a in attachments
+        ]) if attachments else "None"
         
-        response = self.llm.invoke(messages)
-        return response.content.strip().strip('"')
-    
-    def generate_implementation_guide(self, conversation: list[dict], attachments: list[dict]) -> str:
-        """Generate an implementation guide markdown document from the conversation."""
         if not self.llm:
-            # Fallback guide
-            conversation_text = "\n".join([
-                f"- **{msg['role']}**: {msg['content']}" 
-                for msg in conversation
-            ])
-            return f"""# Implementation Guide
+            # Fallback when no LLM
+            fallback_title = f"Update - {datetime.now().strftime('%b %d')}"
+            fallback_guide = f"""# Implementation Guide
 
 ## Overview
 This document contains the implementation details gathered from the update wizard conversation.
@@ -167,27 +162,23 @@ This document contains the implementation details gathered from the update wizar
 ## Instructions
 Follow the changes described in the conversation above to update each integration.
 {IMPLEMENTATION_REQUIREMENTS}"""
+            return fallback_title, fallback_guide
         
-        conversation_text = "\n".join([
-            f"{msg['role'].upper()}: {msg['content']}" 
-            for msg in conversation
-        ])
-        
-        attachments_text = "\n".join([
-            f"- {a.get('name', 'Attachment')}: {a.get('url', a.get('file_path', 'N/A'))}"
-            for a in attachments
-        ]) if attachments else "None"
+        structured_llm = self.llm.with_structured_output(TitleAndGuide)
         
         messages = [
-            SystemMessage(content="""Generate a detailed implementation guide in Markdown format based on the conversation below. 
-The guide should include:
-1. Overview - A summary of what needs to be updated
-2. Changes Required - Detailed list of changes to implement
-3. Technical Details - Any specific technical requirements mentioned
-4. Breaking Changes - Any breaking changes or migration notes
-5. References - Links to PRs, documentation, or other resources
+            SystemMessage(content="""Analyze the conversation and generate two outputs:
 
-Keep it concise but comprehensive. This will be used by an AI agent to implement the updates."""),
+1. **title**: A very short title (3-10 words max) summarizing this integration update.
+
+2. **implementation_guide**: A detailed implementation guide in Markdown format including:
+   - Overview - A summary of what needs to be updated
+   - Changes Required - Detailed list of changes to implement
+   - Technical Details - Any specific technical requirements mentioned
+   - Breaking Changes - Any breaking changes or migration notes
+   - References - Links to PRs, documentation, or other resources
+
+Keep the guide concise but comprehensive. It will be used by an AI agent to implement the updates."""),
             HumanMessage(content=f"""CONVERSATION:
 {conversation_text}
 
@@ -195,8 +186,8 @@ ATTACHMENTS:
 {attachments_text}""")
         ]
         
-        response = self.llm.invoke(messages)
-        return response.content + IMPLEMENTATION_REQUIREMENTS
+        result: TitleAndGuide = structured_llm.invoke(messages)
+        return result.title.strip().strip('"'), result.implementation_guide + IMPLEMENTATION_REQUIREMENTS
 
     def extract_memory(self, user_message: str, context: str = "") -> Optional[str]:
         """

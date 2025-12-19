@@ -4,10 +4,8 @@ import {
   X,
   Play,
   RefreshCw,
-  GitBranch,
   GitPullRequest,
   GitPullRequestClosed,
-  GitMerge,
   AlertCircle,
   CheckCircle,
   Loader2,
@@ -43,6 +41,7 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bgC
 
 export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedIntegration }: UpdateDetailsModalProps) {
   const [selectedIntegration, setSelectedIntegration] = useState<string | null>(initialExpandedIntegration ?? null)
+  const [showPlan, setShowPlan] = useState(false)
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -154,7 +153,7 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.2 }}
-              className="w-full max-w-5xl h-[85vh] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+              className="relative w-full max-w-5xl h-[85vh] bg-background border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -224,31 +223,81 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
                     )
                   })}
                 </div>
-                {canStartAgents && (
-                  <button
-                    onClick={() => startAgentsMutation.mutate()}
-                    disabled={startAgentsMutation.isPending}
-                    className="btn-primary text-sm flex items-center gap-2"
-                  >
-                    {startAgentsMutation.isPending ? (
-                      <>
-                        <Loader2 size={14} className="animate-spin" />
-                        Starting...
-                      </>
-                    ) : (
-                      <>
-                        <Play size={14} />
-                        Start Agents
-                      </>
-                    )}
-                  </button>
-                )}
-                {!hasApiKey && (
-                  <span className="text-xs text-amber-400">
-                    Configure Cursor API key in Settings to start agents
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {update.implementation_guide && (
+                    <button
+                      onClick={() => setShowPlan(true)}
+                      className="btn-secondary text-sm flex items-center gap-2"
+                    >
+                      <FileText size={14} />
+                      View Plan
+                    </button>
+                  )}
+                  {canStartAgents && (
+                    <button
+                      onClick={() => startAgentsMutation.mutate()}
+                      disabled={startAgentsMutation.isPending}
+                      className="btn-primary text-sm flex items-center gap-2"
+                    >
+                      {startAgentsMutation.isPending ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Starting...
+                        </>
+                      ) : (
+                        <>
+                          <Play size={14} />
+                          Start Agents
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {!hasApiKey && (
+                    <span className="text-xs text-amber-400">
+                      Configure Cursor API key in Settings to start agents
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* Plan Modal */}
+              <AnimatePresence>
+                {showPlan && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10 flex items-center justify-center p-8"
+                    onClick={() => setShowPlan(false)}
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="w-full max-w-3xl max-h-full bg-background border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-surface">
+                        <div className="flex items-center gap-2">
+                          <FileText size={18} className="text-accent" />
+                          <h3 className="font-semibold text-text-primary">Implementation Plan</h3>
+                        </div>
+                        <button
+                          onClick={() => setShowPlan(false)}
+                          className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-primary transition-colors"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-5">
+                        <pre className="text-sm text-text-secondary whitespace-pre-wrap font-mono leading-relaxed">
+                          {update.implementation_guide}
+                        </pre>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Main Content - Sidebar + Content */}
               <div className="flex-1 flex overflow-hidden">
@@ -323,82 +372,13 @@ export function UpdateDetailsModal({ update, isOpen, onClose, initialExpandedInt
                 <div className="flex-1 flex flex-col overflow-hidden">
                   {selectedIntegrationData ? (
                     <>
-                      {/* Integration Header */}
-                      <div className="px-6 py-4 border-b border-border bg-surface/30">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-text-primary">
-                              {selectedIntegrationData.integration_name || 'Unknown'}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              {(() => {
-                                const config = statusConfig[selectedIntegrationData.status] || statusConfig.pending
-                                const Icon = config.icon
-                                return (
-                                  <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded ${config.bgColor}`}>
-                                    <Icon
-                                      size={12}
-                                      className={`${config.color} ${
-                                        selectedIntegrationData.status === 'in_progress' ? 'animate-spin' : ''
-                                      }`}
-                                    />
-                                    <span className={`text-xs font-medium ${config.color}`}>
-                                      {config.label}
-                                    </span>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {selectedIntegrationData.pr_url && (
-                              <a
-                                href={selectedIntegrationData.pr_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                                  selectedIntegrationData.pr_merged
-                                    ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
-                                    : selectedIntegrationData.pr_closed
-                                    ? 'bg-red-400/10 text-red-400 hover:bg-red-400/20'
-                                    : 'bg-green-400/10 text-green-400 hover:bg-green-400/20'
-                                }`}
-                              >
-                                {selectedIntegrationData.pr_merged ? (
-                                  <GitMerge size={14} />
-                                ) : selectedIntegrationData.pr_closed ? (
-                                  <GitPullRequestClosed size={14} />
-                                ) : (
-                                  <GitPullRequest size={14} />
-                                )}
-                                {selectedIntegrationData.pr_merged
-                                  ? 'View Merged PR'
-                                  : selectedIntegrationData.pr_closed
-                                  ? 'View Closed PR'
-                                  : 'View PR'}
-                              </a>
-                            )}
-                            {selectedIntegrationData.cursor_branch_name && selectedIntegrationData.github_url && !selectedIntegrationData.pr_url && (
-                              <a
-                                href={`${selectedIntegrationData.github_url}/tree/${selectedIntegrationData.cursor_branch_name}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
-                              >
-                                <GitBranch size={14} />
-                                {selectedIntegrationData.cursor_branch_name}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Integration Agent Panel */}
                       <div className="flex-1 overflow-y-auto">
                         <IntegrationAgentPanel
                           key={selectedIntegrationData.integration_id}
                           updateId={update.id}
                           integration={selectedIntegrationData}
+                          statusConfig={statusConfig}
                         />
                       </div>
                     </>

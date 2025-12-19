@@ -55,6 +55,7 @@ def list_updates(db: Session = Depends(get_db)):
             id=update.id,
             title=update.title,
             status=update.status,
+            implementation_guide=update.implementation_guide or "",
             selected_integration_ids=update.selected_integration_ids or [],
             auto_create_pr=update.auto_create_pr or False,
             integration_statuses=get_integration_statuses_with_names(db, update),
@@ -74,11 +75,8 @@ def generate_update_content(update_id: str, messages: list, attachments: list):
         
         agent = get_update_agent()
         
-        # Generate title
-        title = agent.generate_title(messages)
-        
-        # Generate implementation guide
-        implementation_guide = agent.generate_implementation_guide(messages, attachments)
+        # Generate title and implementation guide in a single LLM call
+        title, implementation_guide = agent.generate_title_and_guide(messages, attachments)
         
         # Get description from last AI message
         description = ""

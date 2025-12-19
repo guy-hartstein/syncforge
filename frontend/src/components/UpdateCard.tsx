@@ -157,49 +157,51 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
         </div>
       </div>
 
-      {/* Integration chips */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {integrationStatuses.slice(0, isExpanded ? undefined : 3).map((status) => {
-          const config = statusConfig[status.status]
-          return (
-            <div
-              key={status.id}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${config.bgColor} ${config.color}`}
-              title={`${status.integration_name}: ${config.label}`}
-            >
-              {config.icon}
-              <span className="truncate max-w-[100px]">{status.integration_name}</span>
-            </div>
-          )
-        })}
-        {!isExpanded && integrationStatuses.length > 3 && (
-          <span className="text-xs text-text-muted px-2 py-1">
-            +{integrationStatuses.length - 3} more
-          </span>
-        )}
-      </div>
+      {/* Integration chips - hide while creating */}
+      {!isCreating && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {integrationStatuses.slice(0, isExpanded ? undefined : 3).map((status) => {
+            const config = statusConfig[status.status]
+            return (
+              <div
+                key={status.id}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs ${config.bgColor} ${config.color}`}
+                title={`${status.integration_name}: ${config.label}`}
+              >
+                {config.icon}
+                <span className="truncate max-w-[100px]">{status.integration_name}</span>
+              </div>
+            )
+          })}
+          {!isExpanded && integrationStatuses.length > 3 && (
+            <span className="text-xs text-text-muted px-2 py-1">
+              +{integrationStatuses.length - 3} more
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Expand/Collapse and Open Details buttons */}
-      <div className="flex items-center justify-between">
-        {integrationStatuses.length > 0 && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors py-1"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp size={14} />
-                Show less
-              </>
-            ) : (
-              <>
-                <ChevronDown size={14} />
-                Show details
-              </>
-            )}
-          </button>
-        )}
-        {!isCreating && (
+      {/* Expand/Collapse and Open Details buttons - hide while creating */}
+      {!isCreating && (
+        <div className="flex items-center justify-between">
+          {integrationStatuses.length > 0 && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors py-1"
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp size={14} />
+                  Show less
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} />
+                  Show details
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={() => {
               setSelectedIntegrationId(null)
@@ -210,8 +212,8 @@ export function UpdateCard({ update, onDelete, index }: UpdateCardProps) {
             <ExternalLink size={14} />
             {hasAgents ? 'View Agents' : 'Manage'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Expanded details */}
       <AnimatePresence>

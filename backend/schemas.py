@@ -186,6 +186,7 @@ class UpdateListResponse(BaseModel):
     id: str
     title: str
     status: str
+    implementation_guide: str = ""
     selected_integration_ids: List[str]
     auto_create_pr: bool = False
     integration_statuses: List[UpdateIntegrationResponse] = []
